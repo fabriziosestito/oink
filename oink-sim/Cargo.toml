@@ -1,0 +1,17 @@
+[package]
+name = "oink-sim"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "oink-sim"
+path = "src/main.rs"
+
+[dependencies]
+oink-core = { path = "../oink-core" }
+embedded-graphics.workspace = true
+embedded-graphics-simulator = "0.7"
+# Build a real SDL2 statically instead of linking Homebrew's sdl2-compat
+# (SDL3-based), which emits events that crash the sdl2 crate.
+sdl2 = { version = "0.37", features = ["bundled", "static-link"] }

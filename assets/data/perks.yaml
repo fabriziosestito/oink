@@ -1,0 +1,10 @@
+agility:
+  name: Agility
+  description: Quick on your feet.
+  modifiers:
+    skill: 1
+silver_tongue:
+  name: Silver Tongue
+  description: Trolls listen to you. Sometimes.
+  modifiers:
+    luck: 1
