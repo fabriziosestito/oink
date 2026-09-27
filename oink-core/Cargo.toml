@@ -7,5 +7,9 @@ license.workspace = true
 [dependencies]
 bladeink.workspace = true
 bladeink-compiler.workspace = true
+oink-rulebook = { path = "../oink-rulebook" }
 serde.workspace = true
 serde_yaml.workspace = true
+
+[features]
+spells = ["oink-rulebook/spells"]

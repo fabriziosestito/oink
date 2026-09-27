@@ -1,9 +1,1 @@
 title: "Oink Demo"
-dice: 2d6
-stats:
-  skill: 8
-  stamina: 20
-  luck: 10
-starting_inventory:
-  - sword
-  - rope

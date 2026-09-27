@@ -1,62 +1,60 @@
-//! Static game data loaded from YAML: items, perks, engine config.
+//! Static game data: engine config and the loaded rulebook.
 
+use oink_rulebook::{LoadError, Rulebook};
 use serde::Deserialize;
-use std::collections::HashMap;
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Item {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub weight: u32,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Perk {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    /// Stat modifiers, e.g. { agility: 2 }
-    #[serde(default)]
-    pub modifiers: HashMap<String, i32>,
-}
+use std::fmt;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub title: String,
-    /// Dice expression used for skill checks, e.g. "2d6".
-    #[serde(default = "default_dice")]
-    pub dice: String,
-    /// Starting stats, e.g. { skill: 8, stamina: 20 }
-    #[serde(default)]
-    pub stats: HashMap<String, i32>,
-    /// Item ids the player starts with.
-    #[serde(default)]
-    pub starting_inventory: Vec<String>,
 }
 
-fn default_dice() -> String {
-    "2d6".to_string()
-}
-
-#[derive(Debug, Clone, Deserialize)]
+/// The engine config plus the loaded rulebook, shared with bound functions.
+#[derive(Debug, Clone)]
 pub struct GameData {
     pub config: Config,
-    #[serde(default)]
-    pub items: HashMap<String, Item>,
-    #[serde(default)]
-    pub perks: HashMap<String, Perk>,
+    pub rulebook: Rc<Rulebook>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug)]
+pub enum DataError {
+    Config(serde_yaml::Error),
+    Rulebook(LoadError),
+}
+
+impl fmt::Display for DataError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DataError::Config(error) => write!(f, "failed to parse config YAML: {error}"),
+            DataError::Rulebook(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for DataError {}
+
+impl From<serde_yaml::Error> for DataError {
+    fn from(error: serde_yaml::Error) -> Self {
+        DataError::Config(error)
+    }
+}
+
+impl From<LoadError> for DataError {
+    fn from(error: LoadError) -> Self {
+        DataError::Rulebook(error)
+    }
 }
 
 impl GameData {
-    pub fn from_yaml(config: &str, items: &str, perks: &str) -> Result<Self, serde_yaml::Error> {
+    pub fn from_yaml(config: &str, rulebook: &str) -> Result<Self, DataError> {
+        let config: Config = serde_yaml::from_str(config)?;
+        let loaded = Rulebook::load(rulebook)?;
         Ok(Self {
-            config: serde_yaml::from_str(config)?,
-            items: serde_yaml::from_str(items)?,
-            perks: serde_yaml::from_str(perks)?,
+            config,
+            rulebook: Rc::new(loaded.rulebook),
+            warnings: loaded.warnings,
         })
     }
 }
