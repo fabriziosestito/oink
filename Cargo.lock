@@ -396,6 +396,15 @@ version = "0.1.0"
 dependencies = [
  "bladeink",
  "bladeink-compiler",
+ "oink-rulebook",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
+name = "oink-rulebook"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_yaml",
 ]
