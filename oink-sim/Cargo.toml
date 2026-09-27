@@ -11,7 +11,8 @@ path = "src/main.rs"
 [dependencies]
 oink-core = { path = "../oink-core" }
 embedded-graphics.workspace = true
-embedded-graphics-simulator = "0.7"
-# Build a real SDL2 statically instead of linking Homebrew's sdl2-compat
-# (SDL3-based), which emits events that crash the sdl2 crate.
-sdl2 = { version = "0.37", features = ["bundled", "static-link"] }
+embedded-graphics-simulator = "0.8"
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS only: Homebrew ships sdl2-compat (SDL3-based), which emits events
+# that crash the sdl2 crate. Build a real SDL2 statically there instead.
+sdl2 = { version = "0.38", features = ["bundled", "static-link"] }
