@@ -11,7 +11,7 @@ use embedded_graphics::{
 use embedded_graphics_simulator::{
     sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
 };
-use oink_core::{data::GameData, Engine, Event};
+use oink_core::{data::GameData, CheckRecord, Engine, Event};
 
 const WIDTH: u32 = 960;
 const HEIGHT: u32 = 540;
@@ -23,19 +23,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ink = std::fs::read_to_string("assets/story/main.ink")?;
     let data = GameData::from_yaml(
         &std::fs::read_to_string("assets/data/config.yaml")?,
-        &std::fs::read_to_string("assets/data/items.yaml")?,
-        &std::fs::read_to_string("assets/data/perks.yaml")?,
+        &std::fs::read_to_string("assets/data/rulebook.yaml")?,
     )?;
 
     let title = data.config.title.clone();
     let mut engine = Engine::new(&ink, data)?;
     let mut event = engine.start()?;
+    let mut checks = engine.take_checks();
 
     let mut display = SimulatorDisplay::<Gray4>::new(Size::new(WIDTH, HEIGHT));
     let settings = OutputSettingsBuilder::new().scale(1).build();
     let mut window = Window::new(&title, &settings);
 
-    render(&mut display, &event)?;
+    render(&mut display, &event, &checks)?;
     window.update(&display);
 
     'run: loop {
@@ -58,7 +58,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Event::Scene { choices, .. } = &event {
                 if i < choices.len() {
                     event = engine.choose(i)?;
-                    render(&mut display, &event)?;
+                    checks = engine.take_checks();
+                    render(&mut display, &event, &checks)?;
                     window.update(&display);
                 }
             }
@@ -87,6 +88,7 @@ fn digit(key: Keycode) -> Option<usize> {
 fn render(
     display: &mut SimulatorDisplay<Gray4>,
     event: &Event,
+    checks: &[CheckRecord],
 ) -> Result<(), std::convert::Infallible> {
     display.clear(Gray4::WHITE)?;
     let style = MonoTextStyle::new(&FONT_10X20, Gray4::BLACK);
@@ -102,6 +104,16 @@ fn render(
             Text::new(&line, Point::new(MARGIN, y), style).draw(display)?;
             y += LINE_HEIGHT;
         }
+        y += LINE_HEIGHT / 2;
+    }
+
+    for check in checks {
+        for line in wrap(&check.describe(), MAX_COLS) {
+            Text::new(&line, Point::new(MARGIN, y), style).draw(display)?;
+            y += LINE_HEIGHT;
+        }
+    }
+    if !checks.is_empty() {
         y += LINE_HEIGHT / 2;
     }
 
