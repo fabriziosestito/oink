@@ -1,0 +1,223 @@
+# oink demo rulebook
+#
+# See the rulebook issue for the full schema. Internal section keys are
+# stable; the `names` block sets what the UI and the story show.
+
+names:
+  characteristics: Characteristics
+  abilities: Abilities
+  perks: Talents
+  conditions: Conditions
+  items: Inventory
+  resources: Focus
+  spells: Powers
+  tags: Tags
+  environments: Environments
+
+difficulties:
+  trivial: 6
+  easy: 8
+  medium: 10
+  challenging: 12
+  formidable: 14
+  legendary: 16
+  heroic: 18
+  godly: 20
+
+characteristics:
+  intellect:
+    name: Intellect
+    min: 1
+    max: 14
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+        - { at: 4, bonus: -1 }
+        - { at: 7, bonus: 0 }
+        - { at: 10, bonus: 1 }
+        - { at: 13, bonus: 2 }
+  psyche:
+    name: Psyche
+    min: 1
+    max: 14
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+        - { at: 4, bonus: -1 }
+        - { at: 7, bonus: 0 }
+        - { at: 10, bonus: 1 }
+        - { at: 13, bonus: 2 }
+  physique:
+    name: Physique
+    min: 1
+    max: 14
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+        - { at: 4, bonus: -1 }
+        - { at: 7, bonus: 0 }
+        - { at: 10, bonus: 1 }
+        - { at: 13, bonus: 2 }
+  motorics:
+    name: Motorics
+    min: 1
+    max: 14
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+        - { at: 4, bonus: -1 }
+        - { at: 7, bonus: 0 }
+        - { at: 10, bonus: 1 }
+        - { at: 13, bonus: 2 }
+
+abilities:
+  logic:
+    name: Logic
+    characteristic: intellect
+  empathy:
+    name: Empathy
+    characteristic: psyche
+  endurance:
+    name: Endurance
+    characteristic: physique
+  lockpicking:
+    name: Lockpicking
+    characteristic: motorics
+    tags: [thief]
+  arcana:
+    name: Arcana
+    characteristic: intellect
+    tags: [wizard]
+
+tags:
+  artist:
+    name: Artist
+    description: A way of seeing, not a skill.
+  thief:
+    name: Thief
+    description: Locks, shadows, and quiet feet.
+  wizard:
+    name: Wizard
+    description: Book magic and long nights.
+    grants:
+      abilities: [arcana]
+      perks: [bookworm]
+  arcane:
+    name: Arcane
+    description: Matters of the unseen.
+  stimulant:
+    name: Stimulant
+    description: A short, borrowed calm.
+  dark:
+    name: Dark
+    description: Little light to work with.
+  low_light:
+    name: Low light
+    description: Enough to see shapes, not details.
+  crowd:
+    name: Crowd
+    description: Too many people, too little room.
+  brute:
+    name: Brute
+    description: Force over finesse.
+  afraid:
+    name: Afraid
+    description: Fear, held in the chest.
+
+perks:
+  artist:
+    name: Artist
+    description: You see the world as a canvas.
+    modifiers:
+      characteristics: { psyche: 1 }
+      abilities: { empathy: 1 }
+      tags: { artist: 2 }
+    grants_tags: [artist]
+  bookworm:
+    name: Bookworm
+    description: You read the footnotes too.
+    modifiers:
+      abilities: { arcana: 1 }
+  night_vision:
+    name: Night Vision
+    description: Your eyes adjust faster than most.
+    modifiers:
+      tags: { dark: 2 }
+
+conditions:
+  shaken:
+    name: Shaken
+    description: Your hands will not stop.
+    modifiers:
+      abilities: { lockpicking: -2 }
+    grants_tags: [afraid]
+    duration: 3
+  nicotine_rush:
+    name: Nicotine Rush
+    description: The edges of the world go soft.
+    modifiers:
+      characteristics: { psyche: 2 }
+    duration: 2
+  hangover:
+    name: Hangover
+    description: The morning after.
+    modifiers:
+      characteristics: { psyche: -1 }
+    duration: 4
+
+environments:
+  dark:
+    name: Dark
+    description: You cannot see much.
+    tags: [dark, low_light]
+    modifiers:
+      abilities: { lockpicking: -2 }
+  crowded:
+    name: Crowded
+    description: Too many bodies, too little air.
+    tags: [crowd]
+    modifiers:
+      abilities: { empathy: -1 }
+
+items:
+  rusty_cleaver:
+    name: Rusty Cleaver
+    description: Heavy, and not clean.
+    weight: 3
+    tags: [weapon, tool]
+    modifiers:
+      abilities: { endurance: 1 }
+      tags: { brute: 1 }
+  cigarette:
+    name: Cigarette
+    tags: [stimulant]
+    consumable: true
+    applies_conditions: [nicotine_rush]
+  lantern:
+    name: Lantern
+    description: A brass lantern, still warm.
+    weight: 1
+    tags: [tool, light]
+
+resources:
+  focus: { name: Focus, min: 0, max: 5 }
+
+spells:
+  telekinesis:
+    name: Telekinesis
+    description: Move a small object with your mind.
+    ability: arcana
+    cost: { resource: focus, amount: 2 }
+    check: { difficulty: challenging, tags: [arcane] }
+
+starting_character:
+  characteristics: { intellect: 3, psyche: 4, physique: 2, motorics: 3 }
+  abilities: { logic: 1, empathy: 2, endurance: 1 }
+  tags: [wizard]
+  perks: [artist]
+  inventory: [rusty_cleaver, cigarette]
+  resources: { focus: 3 }
