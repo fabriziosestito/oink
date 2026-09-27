@@ -1,7 +1,12 @@
 # Contributing to oink
 
 Thanks for the interest. This page holds the setup steps, the commands, and the
-commit rules. Design decisions live in [AGENTS.md](AGENTS.md).
+commit rules. Agent guidance lives in [AGENTS.md](AGENTS.md).
+The [architecture guide](docs/architecture.md) describes current ownership.
+The [documentation index](documentation.md) links the public API references.
+
+Update the relevant reference page with each API change. Keep future designs
+in GitHub issues. Use plain Markdown so the pages can move into a documentation site.
 
 ## Requirements
 
@@ -23,6 +28,9 @@ make lint    # clippy, with warnings as errors
 
 Run `make test` after engine changes. Run `make fmt` and `make lint` before you
 commit.
+
+Spells are optional and sit behind the `spells` feature. Test them with
+`cargo test -p oink-core --features spells`.
 
 ## Run the simulator
 
