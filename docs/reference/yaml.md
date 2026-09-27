@@ -1,0 +1,258 @@
+---
+title: YAML reference
+sidebar_position: 1
+---
+
+# YAML reference
+
+The engine loads `config.yaml` and `rulebook.yaml` as two separate documents.
+`config.yaml` requires a string `title`. All sections below belong to
+`rulebook.yaml` and are optional unless a referenced definition needs them.
+
+## IDs and display names
+
+Definitions are maps keyed by stable string IDs, such as `lockpicking` or
+`night_vision`. Each definition requires a string `name`.
+Descriptions are optional strings. Lists and modifier maps default to empty.
+
+```yaml
+names:
+  characteristics: Attributes
+  abilities: Skills
+  perks: Talents
+  conditions: Conditions
+  items: Inventory
+  resources: Resources
+  spells: Powers
+  tags: Tags
+  environments: Environments
+```
+
+Omitted labels use the section names in title case. Labels change presentation
+only. YAML keys and Ink function names stay the same.
+
+## Characteristics
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `name` | string | Required | Display name |
+| `description` | string | Absent | Description |
+| `min` | integer | `1` | Lowest starting value |
+| `max` | integer | `10` | Highest starting value |
+| `default` | integer | `min` when building a character | Starting value unless overridden |
+| `bonus.thresholds` | list | Empty | Entries with integer `at` and `bonus` |
+
+The loader sorts thresholds from highest to lowest. The highest threshold
+reached by the value supplies the bonus. Values below the lowest threshold use
+its bonus. An empty table returns 0 and produces a loader warning.
+
+```yaml
+characteristics:
+  strength:
+    name: Strength
+    min: 1
+    max: 14
+    default: 10
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+        - { at: 10, bonus: 1 }
+        - { at: 13, bonus: 2 }
+```
+
+## Abilities and difficulties
+
+An ability requires `name` and `characteristic`, which references a characteristic ID.
+It also accepts `description` and a list of `tags`.
+The starting character assigns ability levels. A missing ability contributes level 0.
+
+```yaml
+abilities:
+  climbing:
+    name: Climbing
+    characteristic: strength
+    tags: [physical]
+difficulties:
+  easy: 8
+  medium: 10
+  hard: 12
+```
+
+Difficulty names map to integers. There is no built-in difficulty table when
+the section is omitted. The sample rulebook provides one.
+Ability tags are metadata today; pass check tags explicitly to the check API.
+
+## Modifiers
+
+Perks, conditions, items, and environments accept the same modifier fields:
+
+```yaml
+modifiers:
+  characteristics: { strength: 1 }
+  abilities: { climbing: -2 }
+  tags: { physical: 2 }
+```
+
+These are signed integer adjustments to the check total.
+Characteristic modifiers apply to checks based on that characteristic.
+They do not rewrite the stored characteristic or recalculate its threshold bonus.
+Tag modifiers apply when the check has the named tag.
+See [checks and modifiers](checks.md) for stacking rules.
+
+## Perks and conditions
+
+Perks accept `name`, `description`, `modifiers`, and `grants_tags`.
+Conditions accept those fields plus an optional nonnegative integer `duration`.
+The duration counts explicit `end_scene()` calls, as described in
+[scene boundaries](state.md#scene-boundaries).
+
+```yaml
+perks:
+  steady_hands:
+    name: Steady Hands
+    modifiers:
+      abilities: { climbing: 1 }
+conditions:
+  shaken:
+    name: Shaken
+    duration: 2
+    modifiers:
+      abilities: { climbing: -2 }
+```
+
+Omit `duration` to keep a condition until the story removes it.
+Adding an existing condition resets its duration without stacking its modifiers.
+A duration of 0 expires at the next `end_scene()` call.
+
+## Environments
+
+Environments accept `name`, `description`, `tags`, and `modifiers`.
+They describe the current environment. Their tags join the explicit check tags
+while active, and their modifiers apply to both active and passive checks.
+
+```yaml
+environments:
+  rain:
+    name: Heavy Rain
+    tags: [wet]
+    modifiers:
+      abilities: { climbing: -2 }
+```
+
+The story enters and clears environments by ID. They do not expire when a
+condition expires or when a scene ends.
+
+## Items
+
+Items accept `name`, `description`, `tags`, `modifiers`, a nonnegative integer
+`weight` (default 0), `consumable` (default false), and `applies_conditions`.
+Each condition in `applies_conditions` must exist in the rulebook.
+
+```yaml
+items:
+  climbing_rope:
+    name: Climbing Rope
+    weight: 2
+    tags: [tool]
+    modifiers:
+      abilities: { climbing: 1 }
+  calming_tea:
+    name: Calming Tea
+    consumable: true
+    applies_conditions: [calm]
+conditions:
+  calm:
+    name: Calm
+    duration: 2
+```
+
+Inventory stores unique item IDs. It has no quantities or equipment slots.
+Carried items supply modifiers and tags. Weight is metadata; the engine does
+not enforce a carrying limit. `use_item()` applies conditions and removes an
+owned consumable. An absent item or a non-consumable is left unchanged.
+
+## Tags and grants
+
+Tags accept `name`, `description`, and optional `grants.abilities` and
+`grants.perks` lists. Granted abilities start at level 0.
+Existing ability levels are preserved.
+
+```yaml
+tags:
+  climber:
+    name: Climber
+    description: Trained for steep ground.
+    grants:
+      abilities: [climbing]
+      perks: [steady_hands]
+```
+
+Character tags, perk tags, condition tags, and carried item tags contribute to
+`has_tag()`. Environment tags belong to checks and do not enter that character-tag set.
+Grants remain after their source tag is removed. Grant expansion currently
+stops after at most 32 passes.
+
+## Resources
+
+Resources require `name` and integer `max`. They accept integer `min`
+(default 0) and boolean `start_full` (default true).
+`starting_character.resources` overrides the initial value.
+
+```yaml
+resources:
+  health: { name: Health, min: 0, max: 3 }
+  focus: { name: Focus, min: 0, max: 5, start_full: false }
+```
+
+Starting values are clamped to the bounds. Payments are all-or-nothing above
+the minimum. Restoration stops at the maximum. Derived resource maxima and
+character creation pools are not implemented yet.
+
+## Spells
+
+Spell definitions require `name`, `ability`, `cost`, and `check`.
+`description` is optional. Cost requires a resource ID and a nonnegative
+integer amount. Difficulty accepts an integer or a name from `difficulties`.
+
+```yaml
+spells:
+  sure_footing:
+    name: Sure Footing
+    ability: climbing
+    cost: { resource: focus, amount: 2 }
+    check: { difficulty: medium, tags: [physical] }
+```
+
+Definitions load in all builds. Casting requires the `spells` feature.
+See the [Ink API](ink-api.md#spells) for cost and failure behavior.
+
+## Starting character
+
+```yaml
+starting_character:
+  characteristics: { strength: 10 }
+  abilities: { climbing: 2 }
+  tags: [climber]
+  perks: [steady_hands]
+  inventory: [climbing_rope]
+  resources: { focus: 3 }
+```
+
+All fields are optional. Characteristics and resources use their definition
+defaults when omitted. The remaining collections start empty.
+The engine applies tag grants when it builds the character.
+Conditions and environments start empty.
+
+## Loading errors and warnings
+
+The loader rejects malformed YAML, reversed bounds, invalid characteristic
+defaults, unknown ability parents, unknown grant targets, and unknown starting IDs.
+It also rejects unknown conditions applied by items and invalid spell references
+or negative spell costs.
+
+Unknown tags used by abilities, grants, environments, spell checks, or tag
+modifiers produce warnings. Descriptive item tags need no registry entry.
+Missing bonus tables produce warnings. `GameData.warnings` exposes these to the host.
+
+Validation is not exhaustive today. Unknown YAML fields are ignored, and
+characteristic or ability IDs inside modifier maps are not checked.

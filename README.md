@@ -22,7 +22,8 @@ oink is in early development.
   six always wins, a double one always loses. White checks can be retried, red
   checks are one shot.
 - 🧾 **Your world, your rules.** Define abilities, perks, conditions, and items
-  in plain text. The engine tracks them and uses them in checks.
+  in plain text. The engine tracks them and uses them in checks. See the
+  [documentation](documentation.md).
 - 🐽 **Built for e-ink.** E-ink devices are the main event, and the same engine
   runs on Linux, Windows, macOS, iOS, and Android.
 ## 🚧 Coming soon

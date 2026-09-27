@@ -18,8 +18,10 @@ These were deliberate choices. Do not revisit them without a strong reason.
 1. **Ink for narrative, YAML for data.**
    - Story, scenes, branching, choices, skill-check flow: **Ink**
      (`assets/story/*.ink`).
-   - Item definitions, perks, engine config (dice rules, starting stats,
-     starting inventory): **YAML** (`assets/data/*.yaml`).
+   - Rule definitions and starting character: **YAML** (`assets/data/rulebook.yaml`).
+     The game title lives in `assets/data/config.yaml`.
+   - Checks use a fixed **2d6** system. Double ones fail and double sixes
+     succeed. Passive checks use a constant 6 instead of rolling.
    - Ink references data by ID; rich item/perk structure never lives in Ink
      (Ink has no structs). Runtime state (inventory, HP) lives in the engine
      and is exposed to Ink via external functions.
@@ -60,29 +62,49 @@ oink/
 ├── Cargo.toml           # workspace (resolver 2); shared deps in [workspace.dependencies]
 ├── Makefile             # build / sim / test / check / fmt / lint / clean / m5paper
 ├── .cargo/config.toml   # SDL2 link path + CMake policy (macOS/aarch64)
+├── documentation.md    # entry point to user documentation
+├── docs/index.md       # documentation navigation
+├── docs/reference/     # YAML, checks, state, Ink API, and Rust API
+├── docs/architecture.md # current crate boundaries and runtime ownership
 ├── oink-core/           # engine core: Ink runtime wrapper + YAML data model
 │   └── src/
 │       ├── lib.rs
-│       ├── data.rs      # Item, Perk, Config, GameData (serde)
-│       └── engine.rs    # Engine, Event::{Scene,TheEnd}, Choice + tests
+│       ├── data.rs      # Config, GameData (rulebook-backed)
+│       └── engine.rs    # Engine, Event, Choice, external bindings + tests
+├── oink-rulebook/       # rulebook crate: checks, modifiers, resources, character state
+│   └── src/
+│       ├── lib.rs
+│       ├── model.rs     # resource definitions from rulebook.yaml
+│       ├── loader.rs    # YAML loading and validation
+│       ├── modifiers.rs # modifier stacking and breakdowns
+│       ├── check.rs     # active (2d6) and passive (+6) checks
+│       ├── dice.rs      # Dice trait, seeded dice for tests
+│       ├── names.rs     # renameable display labels
+│       ├── spell.rs     # (feature: spells) cost and cast resolution
+│       └── state.rs     # Character state and change events
 ├── oink-sim/            # desktop simulator: 960x540 Gray4, keys 1-9 choose, Esc quits
 │   └── src/main.rs
 ├── oink-m5paper/        # (planned) ESP32 firmware: esp-idf-hal + it8951 + GT911 touch
 └── assets/
+    ├── logo.png         # mascot (hi-res in logo-hires.png)
     ├── story/main.ink   # demo story (troll on a bridge)
     └── data/
-        ├── config.yaml  # title, dice ("2d6"), stats, starting_inventory
-        ├── items.yaml   # id -> { name, description, weight, tags }
-        └── perks.yaml   # id -> { name, description, modifiers: {stat: delta} }
+        ├── config.yaml  # game title
+        └── rulebook.yaml # rulebook: characteristics, abilities, perks, checks
 ```
 
 ## Engine API (oink-core)
 
-- `GameData::from_yaml(config, items, perks)` — parse the three YAML docs.
-- `Engine::new(ink_source, data)` — compile ink, load story; seeds
-  `inventory` from `config.starting_inventory`.
+- `GameData::from_yaml(config, rulebook)` — parse the two YAML docs.
+- `Engine::new(ink_source, data)` — compile ink, load the story, build the
+  starting character from `rulebook.starting_character`, and bind the
+  external functions.
 - `Engine::from_json(story_json, data)` — load precompiled `.ink.json`
   (build-time compile path for firmware).
+- `Engine::character()` — read the character sheet. `Engine::take_changes()`
+  drains the `StateChange` queue. `Engine::take_checks()` returns the checks
+  since the last call, dice and breakdown included, for the UI.
+  `Engine::set_seed(seed)` makes rolls deterministic.
 - `Engine::start() -> Result<Event, EngineError>` /
   `Engine::choose(index) -> Result<Event, EngineError>`.
 - `Event::Scene { text, choices }` — prose paragraphs + choices to render.
@@ -92,6 +114,13 @@ oink/
   400 paragraphs, paragraph 400 = victory.
 - `EngineError::{Compile, Story}` — runtime-agnostic error type (no `bladeink`
   types leak into the public API).
+- Bound external functions: `roll_check`, `passive_check`, `passive_value`,
+  `check_breakdown`, `difficulty`, `enter_environment`, `clear_environment`,
+  `has_item`, `add_item`, `remove_item`, `use_item`, `has_perk`, `add_perk`,
+  `remove_perk`, `has_condition`, `add_condition`, `remove_condition`,
+  `has_tag`, `ability_level`, `characteristic`, `characteristic_bonus`,
+  `resource`, `spend_resource`, `restore_resource`, `end_scene`. `cast_spell` is bound
+  with the `spells` feature.
 
 ## Presentation modes: the tag contract
 
@@ -113,11 +142,10 @@ section updated as the single source of truth):
 happens in `oink-core` today (see roadmap). `bladeink` exposes tags
 (`Story::get_current_tags`, `Choice::tags`) so no runtime change is needed.
 
-Planned external functions (engine-bound, callable from Ink):
-`has_item(id)`, `add_item(id)`, `remove_item(id)`, `has_perk(id)`,
-`roll_check(stat, difficulty)`. Dice *invocation* belongs in Ink
-(`RANDOM(1,6)` or `roll_check`); dice *rules* (which dice, modifiers, crits)
-belong in `config.yaml`.
+External functions are bound by `oink-core` (inventory, perks, conditions,
+tags, checks, environments, resources; see the Engine API list). The writer calls
+`end_scene()` once per scene boundary to advance timed conditions. Choices,
+knots, and story endings do not advance durations automatically.
 
 Character definitions (name, portrait assets), map layouts, and mode config
 go in YAML, referenced by ID from tags.
@@ -141,6 +169,11 @@ changes. The simulator is the manual test bed.
   workspace root (run via `make sim` or from repo root).
 - Prose (docs, READMEs, error messages, chat replies): load the
   `simple-english` skill first and follow its plain-English rules.
+- User documentation starts at [documentation.md](documentation.md).
+  Keep reference pages in `docs/reference/` and current architecture in
+  `docs/architecture.md`. Use plain Markdown and relative links, with
+  Docusaurus-compatible front matter. Document exposed API changes, defaults,
+  errors, and effects in the matching page. Future designs belong in issues.
 
 ## Commits
 
@@ -160,10 +193,10 @@ changes. The simulator is the manual test bed.
 - [ ] Mobile builds (iOS, Android).
 - [ ] Tag parsing in `oink-core` (`mode`, `speaker`, ...) — extend
       `Event::Scene` with mode + per-line speaker.
-- [ ] External functions (inventory/perks/dice) bridged into Ink via
-      `bladeink`'s `bind_external_function`; dice rules parsed from
-      `config.yaml`.
+- [x] External functions (inventory/perks/conditions/tags/checks/environments/
+      resources) bound into Ink via `bladeink`'s `bind_external_function`.
 - [ ] Dialog and map renderers in the UI layer.
 - [ ] Characters/maps YAML schemas.
-- [ ] Save/load (bookmark) support.
+- [x] Optional spells module behind the `spells` feature.
+- [ ] Story and world state (flags, counters) and save/load (issue #2).
 - [x] Pig mascot + logo (`assets/logo.png`, hi-res in `assets/logo-hires.png`).
