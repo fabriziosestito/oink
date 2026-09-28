@@ -5,7 +5,9 @@ commit rules. Design decisions live in [AGENTS.md](AGENTS.md).
 
 ## Requirements
 
-You need Rust stable and CMake. The simulator builds SDL2 from source on the
+You need Rust stable. On Linux, also install the SDL2 development package
+(`sudo apt install libsdl2-dev` on Debian and Ubuntu). On macOS, install
+CMake instead: the simulator builds its own SDL2 from source there on the
 first run.
 
 ## Commands
