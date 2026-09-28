@@ -35,8 +35,11 @@ oink is in early development.
 
 ## 🚀 Quickstart
 
-Play the demo story on your laptop, no hardware needed. You need Rust and
-CMake. The first build takes a few minutes because SDL2 compiles from source.
+Play the demo story on your laptop, no hardware needed. You need Rust stable.
+On Linux, first install the SDL2 development package (`sudo apt install
+libsdl2-dev` on Debian and Ubuntu). On macOS, install CMake instead: the
+simulator builds its own SDL2 from source there, so the first build takes a
+few minutes.
 
 ```sh
 make sim    # play the demo story
