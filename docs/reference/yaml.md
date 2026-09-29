@@ -189,8 +189,8 @@ tags:
 
 Character tags, perk tags, condition tags, and carried item tags contribute to
 `has_tag()`. Environment tags belong to checks and do not enter that character-tag set.
-Grants remain after their source tag is removed. Grant expansion currently
-stops after at most 32 passes.
+Grants remain after their source tag is removed. Grant expansion continues until
+the sheet stops changing.
 
 ## Resources
 

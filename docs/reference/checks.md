@@ -80,7 +80,8 @@ Spaces are trimmed and empty entries are ignored. Repeated tags do not stack.
 Ability metadata tags and character tags are not added automatically.
 
 Each owned source is visited once. A source with several matching modifier
-entries contributes all of them. There is no total modifier cap.
+entries contributes all of them. There is no total modifier cap. Totals
+saturate at the `i32` bounds, so extreme values clamp instead of overflowing.
 
 ```yaml
 perks:

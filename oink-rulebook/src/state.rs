@@ -13,6 +13,7 @@ pub enum StateChange {
     PerkAdded(String),
     PerkRemoved(String),
     ConditionAdded(String),
+    ConditionRefreshed(String),
     ConditionRemoved(String),
     EnvironmentEntered(String),
     EnvironmentCleared(String),
@@ -30,6 +31,7 @@ impl fmt::Display for StateChange {
             StateChange::PerkAdded(id) => write!(f, "perk added: {id}"),
             StateChange::PerkRemoved(id) => write!(f, "perk removed: {id}"),
             StateChange::ConditionAdded(id) => write!(f, "condition added: {id}"),
+            StateChange::ConditionRefreshed(id) => write!(f, "condition refreshed: {id}"),
             StateChange::ConditionRemoved(id) => write!(f, "condition removed: {id}"),
             StateChange::EnvironmentEntered(id) => write!(f, "environment entered: {id}"),
             StateChange::EnvironmentCleared(id) => write!(f, "environment cleared: {id}"),
@@ -191,9 +193,13 @@ impl Character {
 
     /// Apply abilities and perks granted by the tags the character has.
     /// Grants apply once. Removing a tag does not take a grant back.
+    ///
+    /// The loop runs until the sheet stops changing. Every pass that changes
+    /// the sheet adds at least one ability or perk, so the pass count is
+    /// bounded by the rulebook definitions.
     pub fn apply_grants(&mut self, rulebook: &Rulebook) -> Vec<StateChange> {
         let mut changes = Vec::new();
-        for _ in 0..32 {
+        loop {
             let tags = self.effective_tags(rulebook);
             let mut changed = false;
             for tag in &tags {
@@ -264,7 +270,8 @@ impl Character {
     }
 
     /// Add a condition with an explicit duration. `None` means the condition
-    /// stays until the story removes it.
+    /// stays until the story removes it. Re-adding a condition with a
+    /// different duration emits a refresh record.
     pub fn add_timed_condition(
         &mut self,
         rulebook: &Rulebook,
@@ -272,8 +279,12 @@ impl Character {
         duration: Option<u32>,
     ) -> Vec<StateChange> {
         let mut changes = Vec::new();
-        if self.conditions.insert(id.to_string(), duration).is_none() {
-            changes.push(StateChange::ConditionAdded(id.to_string()));
+        match self.conditions.insert(id.to_string(), duration) {
+            None => changes.push(StateChange::ConditionAdded(id.to_string())),
+            Some(previous) if previous != duration => {
+                changes.push(StateChange::ConditionRefreshed(id.to_string()));
+            }
+            Some(_) => {}
         }
         changes.extend(self.apply_grants(rulebook));
         changes

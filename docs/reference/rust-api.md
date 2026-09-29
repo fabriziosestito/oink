@@ -173,8 +173,8 @@ in-memory character and return notices.
 | `perk_ids`, `item_ids`, `condition_ids`, `environment_ids`, `ability_ids`, `tag_ids` | Iterate stored IDs |
 | `add_item`, `add_perk`, `add_condition`, `enter_environment`, `add_tag` | Take `&rulebook` and an ID; return `Vec<StateChange>` |
 | `remove_item`, `remove_perk`, `remove_condition`, `clear_environment`, `remove_tag` | Take an ID; return `Vec<StateChange>` |
-| `add_timed_condition(&rulebook, id, Option<u32>)` | Overrides the configured duration |
-| `apply_grants(&rulebook)` | Adds missing grants until stable, up to 32 passes |
+| `add_timed_condition(&rulebook, id, Option<u32>)` | Overrides the configured duration; a changed duration returns a refresh notice |
+| `apply_grants(&rulebook)` | Adds missing grants until stable |
 | `can_spend_resource(&rulebook, id, amount)` | Tests whether a full nonnegative payment fits |
 | `spend_resource` / `restore_resource` | Take `&rulebook`, ID, and amount; return notices |
 | `on_scene_end()` | Decrements durations and returns expiry notices |
