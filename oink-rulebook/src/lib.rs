@@ -15,13 +15,15 @@ pub mod names;
 pub mod spell;
 pub mod state;
 
-pub use check::{CheckError, CheckRequest, CheckResult, Checks, Outcome, PassiveResult};
-pub use dice::{Dice, SeededDice, SystemDice};
+pub use check::{CheckError, CheckRequest, CheckResult, Checks, DiceRoll, PassiveResult, RollKind};
+pub use dice::{parse_notation, Dice, DicePoolError, SeededDice, SystemDice};
 pub use loader::{LoadError, Loaded};
+pub use model::Outcome;
 pub use model::{
-    Ability, BonusTable, BonusThreshold, Characteristic, Condition, Cost, DifficultyRef,
-    Environment, Item, Modifiers, Perk, Resource, Rulebook, Spell, SpellCheck, StartingCharacter,
-    Tag, TagGrants,
+    Ability, BonusTable, BonusThreshold, Characteristic, CharacteristicBonus, Condition, Cost,
+    Degrees, DiceConfig, DicePool, DiceProfile, Die, DifficultyRef, DirectMarker, Direction,
+    Environment, Item, Keep, Modifiers, OutcomeRule, Perk, Resource, Rulebook, Spell, SpellCheck,
+    StartingCharacter, Tag, TagGrants,
 };
 pub use modifiers::{Breakdown, BreakdownEntry};
 pub use names::{Names, Section};
@@ -189,12 +191,12 @@ characteristics:
 
         let mut dice = ScriptedDice::new(&[3, 4]);
         let result = checks.active(&mut dice, &request).unwrap();
-        assert_eq!(result.total, 11);
+        assert_eq!(result.score, 11);
         assert_eq!(result.outcome, Outcome::Success);
 
         let mut dice = ScriptedDice::new(&[1, 2]);
         let result = checks.active(&mut dice, &request).unwrap();
-        assert_eq!(result.total, 7);
+        assert_eq!(result.score, 7);
         assert_eq!(result.outcome, Outcome::Failure);
 
         let mut dice = ScriptedDice::new(&[1, 1]);
@@ -204,7 +206,7 @@ characteristics:
         let mut dice = ScriptedDice::new(&[6, 6]);
         let result = checks.active(&mut dice, &request).unwrap();
         assert_eq!(result.outcome, Outcome::CriticalSuccess);
-        assert_eq!(result.dice, [6, 6]);
+        assert_eq!(result.roll.dice, vec![6, 6]);
     }
 
     #[test]
@@ -279,8 +281,8 @@ characteristics:
         let request = CheckRequest::new("logic", 10).with_modifier(i32::MAX);
         let mut dice = ScriptedDice::new(&[2, 2]);
         let result = checks.active(&mut dice, &request).unwrap();
-        assert_eq!(result.total, i32::MAX);
-        assert_eq!(result.outcome, Outcome::Success);
+        assert_eq!(result.score, i32::MAX);
+        assert_eq!(result.outcome, Outcome::CriticalSuccess);
 
         let result = checks.passive(&request).unwrap();
         assert_eq!(result.value, i32::MAX);
@@ -495,6 +497,89 @@ perks:
         let loaded = Rulebook::load(yaml).expect("loads");
         assert_eq!(loaded.warnings.len(), 1);
         assert!(loaded.warnings[0].contains("tag `artist`"));
+    }
+
+    #[test]
+    fn loader_rejects_bad_dice_notation() {
+        let yaml = r#"
+dice:
+  default: standard
+  profiles:
+    standard:
+      notation: "2d7"
+      direction: over
+      outcomes:
+        - { outcome: success }
+"#;
+        let error = Rulebook::load(yaml).unwrap_err();
+        assert!(error.to_string().contains("standard"), "{error}");
+    }
+
+    #[test]
+    fn loader_rejects_unknown_default_profile() {
+        let yaml = r#"
+dice:
+  default: missing
+  profiles:
+    standard:
+      notation: "2d6"
+      direction: over
+      outcomes:
+        - { outcome: success }
+"#;
+        let error = Rulebook::load(yaml).unwrap_err();
+        assert!(error.to_string().contains("missing"), "{error}");
+    }
+
+    #[test]
+    fn loader_rejects_unknown_advantage_pool() {
+        let yaml = r#"
+dice:
+  default: standard
+  profiles:
+    standard:
+      notation: "1d20"
+      direction: over
+      advantage: nope
+      outcomes:
+        - { outcome: success }
+"#;
+        let error = Rulebook::load(yaml).unwrap_err();
+        assert!(error.to_string().contains("nope"), "{error}");
+    }
+
+    #[test]
+    fn loader_warns_without_catch_all() {
+        let yaml = r#"
+dice:
+  default: standard
+  profiles:
+    standard:
+      notation: "2d6"
+      direction: over
+      outcomes:
+        - { margin_at_least: 0, outcome: success }
+"#;
+        let loaded = Rulebook::load(yaml).expect("loads");
+        assert!(
+            loaded.warnings.iter().any(|w| w.contains("catch-all")),
+            "{:?}",
+            loaded.warnings
+        );
+    }
+
+    #[test]
+    fn direct_bonus_passes_value_through() {
+        let yaml = r#"
+characteristics:
+  ws:
+    name: WS
+    min: 1
+    max: 100
+    bonus: direct
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        assert_eq!(rulebook.characteristics["ws"].bonus_for(42), 42);
     }
 
     #[cfg(feature = "spells")]

@@ -5,7 +5,10 @@ use crate::external::bind_external_functions;
 use bladeink::story::Story;
 use bladeink::story_error::StoryError;
 use bladeink_compiler::Compiler;
-use oink_rulebook::{Breakdown, Character, Dice, Rulebook, SeededDice, StateChange, SystemDice};
+use oink_rulebook::{
+    Breakdown, Character, CheckResult, Dice, DiceRoll, RollKind, Rulebook, SeededDice, StateChange,
+    SystemDice,
+};
 use std::cell::{Ref, RefCell};
 use std::fmt;
 use std::rc::Rc;
@@ -58,14 +61,18 @@ pub struct CheckRecord {
     pub ability: String,
     pub difficulty: i32,
     pub outcome: String,
-    pub total: i32,
-    pub dice: Option<[u8; 2]>,
+    pub pool: String,
+    pub score: i32,
+    pub target: i32,
+    pub margin: i32,
+    pub degrees: i32,
+    pub dice: Option<DiceRoll>,
     pub breakdown: Breakdown,
 }
 
 impl CheckRecord {
-    /// A one-line summary for the UI: each die, every modifier source, the
-    /// total, and the target.
+    /// A one-line summary for the UI: every die with dropped dice marked,
+    /// every modifier source, and the score against the target with degrees.
     pub fn describe(&self) -> String {
         let modifiers = self
             .breakdown
@@ -79,25 +86,58 @@ impl CheckRecord {
         } else {
             modifiers
         };
-        match self.dice {
-            Some(dice) => {
-                let dice_total = i32::from(dice[0]) + i32::from(dice[1]);
+        match &self.dice {
+            Some(roll) => {
+                let dice_desc = match roll.kind {
+                    RollKind::Percentile => format!("d% {}", roll.total),
+                    RollKind::Sum => {
+                        let parts: Vec<String> = roll
+                            .dice
+                            .iter()
+                            .zip(roll.kept.iter())
+                            .map(|(face, kept)| {
+                                if *kept {
+                                    format!("die {face}")
+                                } else {
+                                    format!("die {face} (dropped)")
+                                }
+                            })
+                            .collect();
+                        format!("{} = {}", parts.join(" + "), roll.total)
+                    }
+                };
                 format!(
-                    "* {} check: die {} + die {} = {}; {}; total {}, {} vs {}",
+                    "* {} check: {}; {}; score {}, target {}, margin {:+}, {}, {} degrees vs {}",
                     self.ability,
-                    dice[0],
-                    dice[1],
-                    dice_total,
+                    dice_desc,
                     modifiers,
-                    self.total,
+                    self.score,
+                    self.target,
+                    self.margin,
                     self.outcome,
+                    self.degrees,
                     self.difficulty
                 )
             }
             None => format!(
-                "* {} sense: {}; total {}, {} vs {}",
-                self.ability, modifiers, self.total, self.outcome, self.difficulty
+                "* {} sense: {}; score {}, {} vs {}",
+                self.ability, modifiers, self.score, self.outcome, self.difficulty
             ),
+        }
+    }
+
+    pub(crate) fn from_active(ability: String, difficulty: i32, result: &CheckResult) -> Self {
+        Self {
+            ability,
+            difficulty,
+            outcome: result.outcome.as_str().to_string(),
+            pool: result.pool.clone(),
+            score: result.score,
+            target: result.target,
+            margin: result.margin,
+            degrees: result.degrees,
+            dice: Some(result.roll.clone()),
+            breakdown: result.breakdown.clone(),
         }
     }
 }
@@ -109,6 +149,7 @@ pub(crate) struct RuleState {
     pub(crate) dice: Box<dyn Dice>,
     pub(crate) changes: Vec<StateChange>,
     pub(crate) checks: Vec<CheckRecord>,
+    pub(crate) last_check: Option<CheckResult>,
 }
 
 pub(crate) type Shared = Rc<RefCell<RuleState>>;
@@ -142,6 +183,7 @@ impl Engine {
             dice: Box::new(SystemDice::new()),
             changes: Vec::new(),
             checks: Vec::new(),
+            last_check: None,
         }));
         bind_external_functions(&mut story, &state)?;
         Ok(Self { story, data, state })
@@ -361,13 +403,17 @@ Focus is {resource("focus")}.
 
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
-        let dice = checks[0].dice.expect("active check rolls dice");
+        let roll = checks[0].dice.clone().expect("active check rolls dice");
         let description = checks[0].describe();
         assert!(
-            description.contains(&format!("die {} + die {}", dice[0], dice[1])),
+            description.contains(&format!("die {}", roll.dice[0])),
             "{description}"
         );
-        assert!(description.contains("total"), "{description}");
+        assert!(
+            description.contains(&format!("die {}", roll.dice[1])),
+            "{description}"
+        );
+        assert!(description.contains("score"), "{description}");
         assert!(description.contains("vs 10"), "{description}");
     }
 
@@ -418,6 +464,99 @@ Breakdown: {check_breakdown("empathy", "artist", -3)}.
         assert!(text.contains("perk artist (tag artist) +2"), "{text}");
         assert!(text.contains("one-off -3"), "{text}");
         assert!(engine.take_checks().is_empty());
+    }
+
+    #[test]
+    fn roll_check_with_profile_and_queries() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
+EXTERNAL check_roll()
+EXTERNAL check_score()
+EXTERNAL check_target()
+EXTERNAL check_margin()
+EXTERNAL check_degrees()
+EXTERNAL check_die(index)
+VAR outcome = ""
+~ outcome = roll_check("endurance", 10, "", 0, "standard")
+Outcome {outcome} roll {check_roll()} score {check_score()} target {check_target()} margin {check_margin()} degrees {check_degrees()} die0 {check_die(0)} die1 {check_die(1)}.
+-> END
+"#,
+        );
+        engine.set_seed(7);
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        let joined = text.join(" ");
+        assert!(joined.contains("Outcome "), "{joined}");
+        assert!(joined.contains("roll "), "{joined}");
+        let checks = engine.take_checks();
+        assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0].pool, "standard");
+    }
+
+    #[test]
+    fn last_check_survives_take_checks() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL roll_check(ability, difficulty, tags, modifier)
+EXTERNAL check_score()
+~ roll_check("endurance", 10, "", 0)
+First.
++ [Continue]
+    Score {check_score()}.
+    -> END
+"#,
+        );
+        engine.set_seed(7);
+        engine.start().unwrap();
+        // Drain the UI queue between scenes.
+        assert_eq!(engine.take_checks().len(), 1);
+        let Event::TheEnd { text } = engine.choose(0).unwrap() else {
+            panic!("expected end")
+        };
+        assert!(text.join(" ").contains("Score "), "{text:?}");
+    }
+
+    #[test]
+    fn unknown_profile_is_a_story_error() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
+~ roll_check("endurance", 10, "", 0, "nope")
+-> END
+"#,
+        );
+        let error = engine.start().unwrap_err();
+        assert!(error.to_string().contains("nope"), "{error}");
+    }
+
+    #[test]
+    fn check_die_out_of_range_is_a_story_error() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL roll_check(ability, difficulty, tags, modifier)
+EXTERNAL check_die(index)
+~ roll_check("endurance", 10, "", 0)
+Die {check_die(5)}.
+-> END
+"#,
+        );
+        let error = engine.start().unwrap_err();
+        assert!(error.to_string().contains("out of range"), "{error}");
+    }
+
+    #[test]
+    fn check_queries_without_a_roll_are_story_errors() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL check_score()
+Score {check_score()}.
+-> END
+"#,
+        );
+        let error = engine.start().unwrap_err();
+        assert!(error.to_string().contains("no active check"), "{error}");
     }
 
     #[test]

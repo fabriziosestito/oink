@@ -108,6 +108,7 @@ pub fn cast<D: Dice + ?Sized>(
         difficulty,
         tags: &tags,
         modifier: 0,
+        pool: None,
     };
     let checks = Checks::new(rulebook, character);
     // Validate the check before spending or advancing the dice source.

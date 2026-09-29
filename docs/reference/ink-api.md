@@ -17,19 +17,29 @@ All IDs below refer to the loaded rulebook.
 
 | Function | Return value | Behavior |
 | --- | --- | --- |
-| `roll_check(ability, difficulty, tags, modifier)` | string | Rolls 2d6, records the check, and returns `critical_failure`, `failure`, `success`, or `critical_success` |
+| `roll_check(ability, difficulty, tags, modifier)` | string | Rolls the default profile, records the check, and returns `critical_failure`, `failure`, `success`, or `critical_success` |
+| `roll_check(ability, difficulty, tags, modifier, dice)` | string | Rolls the named profile and records the check |
+| `check_roll()` | integer | Returns the kept dice total, or the 1..100 value for d% |
+| `check_score()` | integer | Returns the score: dice plus contribution for over, dice alone for under |
+| `check_target()` | integer | Returns the target number |
+| `check_margin()` | integer | Returns the margin |
+| `check_degrees()` | integer | Returns the degrees, or 0 when the profile uses `none` |
+| `check_die(index)` | integer | Returns one face in roll order; for d% index 0 is tens and 1 is units with faces 0..9 |
 | `passive_check(ability, dc, tags, modifier)` | integer | Records the passive check and returns 1 on a pass or 0 on a failure |
 | `passive_value(ability, tags, modifier)` | integer | Returns the passive value without recording a check |
 | `check_breakdown(ability, tags, modifier)` | string | Returns the contribution list and subtotal without dice or the passive constant |
 | `difficulty(name)` | integer | Looks up a configured difficulty |
 
-`ability`, `tags`, and `name` are strings. `difficulty`, `dc`, and `modifier`
+`ability`, `tags`, `name`, and `dice` are strings. `difficulty`, `dc`, and `modifier`
 are integers. `modifier` is a one-off bonus or penalty for this check.
 Use 0 when there is no one-off modifier.
 `tags` is a comma-separated list, or `""` for none.
+`dice` names a profile from the rulebook dice section.
 
-Unknown abilities and difficulty names produce errors. Tags need not be
+Unknown abilities, difficulty names, and dice profiles produce errors. Tags need not be
 registered to match at runtime. See [checks](checks.md) for the calculation.
+Query functions read the last active check and produce errors when no check ran
+yet. `check_die` also errors when the index is out of range.
 
 ```ink
 EXTERNAL passive_value(ability, tags, modifier)

@@ -20,8 +20,9 @@ These were deliberate choices. Do not revisit them without a strong reason.
      (`assets/story/*.ink`).
    - Rule definitions and starting character: **YAML** (`assets/data/rulebook.yaml`).
      The game title lives in `assets/data/config.yaml`.
-   - Checks use a fixed **2d6** system. Double ones fail and double sixes
-     succeed. Passive checks use a constant 6 instead of rolling.
+   - Checks use configurable dice profiles from YAML. The default profile rolls
+     2d6 over with margin degrees and passive 6. Profiles can use d2 through
+     d20 and d%, roll over or under, and define their own outcome table.
    - Ink references data by ID; rich item/perk structure never lives in Ink
      (Ink has no structs). Runtime state (inventory, HP) lives in the engine
      and is exposed to Ink via external functions.
@@ -78,8 +79,8 @@ oink/
 │       ├── model.rs     # resource definitions from rulebook.yaml
 │       ├── loader.rs    # YAML loading and validation
 │       ├── modifiers.rs # modifier stacking and breakdowns
-│       ├── check.rs     # active (2d6) and passive (+6) checks
-│       ├── dice.rs      # Dice trait, seeded dice for tests
+│       ├── check.rs     # active and passive checks with dice profiles
+│       ├── dice.rs      # Dice trait, notation parser, seeded dice for tests
 │       ├── names.rs     # renameable display labels
 │       ├── spell.rs     # (feature: spells) cost and cast resolution
 │       └── state.rs     # Character state and change events

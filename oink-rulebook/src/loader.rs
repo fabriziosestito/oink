@@ -1,6 +1,7 @@
 //! YAML loading and validation.
 
-use crate::model::{DifficultyRef, Rulebook};
+use crate::dice::parse_notation;
+use crate::model::{DifficultyRef, OutcomeRule, Rulebook};
 use std::fmt;
 
 #[derive(Debug)]
@@ -40,6 +41,7 @@ impl Rulebook {
         let mut rulebook: Rulebook = serde_yaml::from_str(source)?;
         rulebook.normalize();
         let mut errors = Vec::new();
+        rulebook.parse_dice(&mut errors);
         let warnings = rulebook.validate(&mut errors);
         if errors.is_empty() {
             Ok(Loaded { rulebook, warnings })
@@ -50,10 +52,19 @@ impl Rulebook {
 
     fn normalize(&mut self) {
         for characteristic in self.characteristics.values_mut() {
-            characteristic
-                .bonus
-                .thresholds
-                .sort_by_key(|threshold| std::cmp::Reverse(threshold.at));
+            characteristic.bonus.sort_thresholds();
+        }
+    }
+
+    fn parse_dice(&mut self, errors: &mut Vec<String>) {
+        for (id, profile) in self.dice.profiles.iter_mut() {
+            match parse_notation(&profile.notation) {
+                Ok(pool) => profile.pool = pool,
+                Err(error) => errors.push(format!(
+                    "dice profile `{id}` has invalid notation `{}`: {error}",
+                    profile.notation
+                )),
+            }
         }
     }
 
@@ -75,10 +86,44 @@ impl Rulebook {
                     ));
                 }
             }
-            if characteristic.bonus.thresholds.is_empty() {
+            if characteristic.bonus.is_empty_table() {
                 warnings.push(format!(
                     "characteristic `{id}` has no bonus thresholds, so checks add 0"
                 ));
+            }
+        }
+
+        if !self.dice.profiles.contains_key(&self.dice.default) {
+            errors.push(format!(
+                "dice default `{}` names an unknown profile",
+                self.dice.default
+            ));
+        }
+        for (id, profile) in &self.dice.profiles {
+            if let Some(name) = &profile.advantage {
+                if !self.dice.profiles.contains_key(name) {
+                    errors.push(format!(
+                        "dice profile `{id}` names an unknown advantage pool `{name}`"
+                    ));
+                }
+            }
+            if let Some(name) = &profile.disadvantage {
+                if !self.dice.profiles.contains_key(name) {
+                    errors.push(format!(
+                        "dice profile `{id}` names an unknown disadvantage pool `{name}`"
+                    ));
+                }
+            }
+            if profile.outcomes.is_empty() {
+                warnings.push(format!(
+                    "dice profile `{id}` has no outcome rows, so unmatched checks return failure"
+                ));
+            } else if let Some(last) = profile.outcomes.last() {
+                if row_has_tests(last) {
+                    warnings.push(format!(
+                        "dice profile `{id}` has no catch-all row, so unmatched checks return failure"
+                    ));
+                }
             }
         }
 
@@ -226,4 +271,20 @@ impl Rulebook {
             ));
         }
     }
+}
+
+fn row_has_tests(rule: &OutcomeRule) -> bool {
+    rule.all_max
+        || rule.all_min
+        || rule.any_max
+        || rule.any_min
+        || rule.doubles
+        || rule.score_at_least.is_some()
+        || rule.score_at_most.is_some()
+        || rule.margin_at_least.is_some()
+        || rule.margin_at_most.is_some()
+        || rule.degrees_at_least.is_some()
+        || rule.degrees_at_most.is_some()
+        || rule.target_at_least.is_some()
+        || rule.target_at_most.is_some()
 }
