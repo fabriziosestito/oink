@@ -9,4 +9,7 @@ Start with the [documentation index](docs/index.md).
 - [Ink API](docs/reference/ink-api.md)
 - [Rust API](docs/reference/rust-api.md)
 - [Architecture](docs/architecture.md)
-- [Publishing these docs](docs/publishing.md)
+- [Writing docs](docs/publishing.md)
+
+Run `make docs` to read these pages as a website on your machine. The same
+site is published at <https://fabriziosestito.github.io/oink/>.
