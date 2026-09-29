@@ -1,6 +1,6 @@
 # oink - gamebooks on e-ink
 
-.PHONY: all build sim test check fmt lint clean m5paper
+.PHONY: all build sim test check fmt lint clean m5paper docs docs-build docs-serve
 
 all: build
 
@@ -25,6 +25,20 @@ lint:
 
 clean:
 	cargo clean
+
+# Documentation site (Docusaurus in website/). Pages come from docs/.
+# Requires Node; the version is pinned in website/.tool-versions.
+website/node_modules:
+	cd website && npm install
+
+docs: website/node_modules
+	cd website && npm start
+
+docs-build: website/node_modules
+	cd website && npm run build
+
+docs-serve: website/node_modules
+	cd website && npm run serve
 
 # M5Paper firmware (not yet in the workspace).
 # Requires the espup toolchain: cargo install espup && espup install
