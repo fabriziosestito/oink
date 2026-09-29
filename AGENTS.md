@@ -60,12 +60,13 @@ These were deliberate choices. Do not revisit them without a strong reason.
 ```
 oink/
 ├── Cargo.toml           # workspace (resolver 2); shared deps in [workspace.dependencies]
-├── Makefile             # build / sim / test / check / fmt / lint / clean / m5paper
+├── Makefile             # build / sim / test / check / fmt / lint / docs / clean / m5paper
 ├── .cargo/config.toml   # SDL2 link path + CMake policy (macOS/aarch64)
 ├── documentation.md    # entry point to user documentation
 ├── docs/index.md       # documentation navigation
 ├── docs/reference/     # YAML, checks, state, Ink API, and Rust API
 ├── docs/architecture.md # current crate boundaries and runtime ownership
+├── website/             # Docusaurus site: theme, landing page, build config
 ├── oink-core/           # engine core: Ink runtime wrapper + YAML data model
 │   └── src/
 │       ├── lib.rs
@@ -158,6 +159,10 @@ simulator controls.
 Always run `make test` (and `make lint` before committing) after engine
 changes. The simulator is the manual test bed.
 
+`make docs` starts the documentation site with hot reload on both `docs/` and
+`website/`. See [docs/publishing.md](docs/publishing.md) for the site layout,
+theme, and deployment.
+
 ## Conventions
 
 - Rust 2021 edition, workspace-level shared dependencies.
@@ -174,6 +179,8 @@ changes. The simulator is the manual test bed.
   `docs/architecture.md`. Use plain Markdown and relative links, with
   Docusaurus-compatible front matter. Document exposed API changes, defaults,
   errors, and effects in the matching page. Future designs belong in issues.
+  The Docusaurus site in `website/` renders the same pages; `make docs` serves
+  them locally.
 
 ## Commits
 

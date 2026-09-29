@@ -50,6 +50,12 @@ make test   # the engine walks the demo story in milliseconds
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full command list and the
 simulator controls.
 
+## 📖 Documentation
+
+The documentation covers the rulebook, the YAML format, checks, and the engine
+API. Read it at <https://fabriziosestito.github.io/oink/>, or run `make docs`
+to serve the site on your machine with hot reload.
+
 ## 📜 License
 
 [Apache-2.0](LICENSE).
