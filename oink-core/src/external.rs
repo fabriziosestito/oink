@@ -14,14 +14,46 @@ pub(crate) fn bind_external_functions(
     {
         let state = Rc::clone(state);
         bind(story, "roll_check", false, move |_name, args| {
+            if args.len() != 4 && args.len() != 5 {
+                return Err(external_error("roll_check expects 4 or 5 arguments"));
+            }
+            // Type-check the fixed args here so a wrong pool type also fails
+            // with a clear message instead of a default value.
+            for (index, expected) in ['s', 'i', 's', 'i', 's']
+                .iter()
+                .enumerate()
+                .take(args.len())
+            {
+                let valid = matches!(
+                    (expected, &args[index]),
+                    ('s', ValueType::String(_)) | ('i', ValueType::Int(_))
+                );
+                if !valid {
+                    let kind = if *expected == 's' {
+                        "string"
+                    } else {
+                        "integer"
+                    };
+                    return Err(external_error(format!(
+                        "roll_check argument {} must be {kind}",
+                        index + 1
+                    )));
+                }
+            }
             let ability = arg_string(args, 0);
             let tags = parse_tags(&arg_string(args, 2));
             let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
+            let pool_owned = if args.len() == 5 {
+                Some(arg_string(args, 4))
+            } else {
+                None
+            };
             let request = CheckRequest {
                 ability: ability.as_str(),
                 difficulty: arg_int(args, 1),
                 tags: &tag_refs,
                 modifier: arg_int(args, 3),
+                pool: pool_owned.as_deref(),
             };
             let mut guard = state.borrow_mut();
             let state = &mut *guard;
@@ -29,15 +61,12 @@ pub(crate) fn bind_external_functions(
             let result = checks
                 .active(state.dice.as_mut(), &request)
                 .map_err(external_error)?;
-            state.checks.push(CheckRecord {
-                ability: request.ability.to_string(),
-                difficulty: request.difficulty,
-                outcome: result.outcome.as_str().to_string(),
-                total: result.total,
-                dice: Some(result.dice),
-                breakdown: result.breakdown,
-            });
-            string_result(result.outcome.as_str())
+            let outcome = result.outcome.as_str().to_string();
+            let record =
+                CheckRecord::from_active(request.ability.to_string(), request.difficulty, &result);
+            state.checks.push(record);
+            state.last_check = Some(result);
+            string_result(&outcome)
         })?;
     }
 
@@ -51,11 +80,13 @@ pub(crate) fn bind_external_functions(
                 difficulty: owned.difficulty,
                 tags: &tag_refs,
                 modifier: owned.modifier,
+                pool: None,
             };
             let mut guard = state.borrow_mut();
             let state = &mut *guard;
             let checks = Checks::new(&state.rulebook, &state.character);
             let result = checks.passive(&request).map_err(external_error)?;
+            let pool = state.rulebook.dice.default.clone();
             state.checks.push(CheckRecord {
                 ability: request.ability.to_string(),
                 difficulty: request.difficulty,
@@ -64,7 +95,11 @@ pub(crate) fn bind_external_functions(
                 } else {
                     "fail".to_string()
                 },
-                total: result.value,
+                pool,
+                score: result.value,
+                target: request.difficulty,
+                margin: result.value.saturating_sub(request.difficulty),
+                degrees: 0,
                 dice: None,
                 breakdown: result.breakdown,
             });
@@ -82,6 +117,7 @@ pub(crate) fn bind_external_functions(
                 difficulty: owned.difficulty,
                 tags: &tag_refs,
                 modifier: owned.modifier,
+                pool: None,
             };
             let guard = state.borrow();
             let checks = Checks::new(&guard.rulebook, &guard.character);
@@ -100,6 +136,7 @@ pub(crate) fn bind_external_functions(
                 difficulty: owned.difficulty,
                 tags: &tag_refs,
                 modifier: owned.modifier,
+                pool: None,
             };
             let guard = state.borrow();
             let checks = Checks::new(&guard.rulebook, &guard.character);
@@ -107,6 +144,87 @@ pub(crate) fn bind_external_functions(
                 .breakdown(request.ability, request.tags, request.modifier)
                 .map_err(external_error)?;
             string_result(&breakdown.to_string())
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "check_roll", true, move |_name, _args| {
+            let guard = state.borrow();
+            let last = guard
+                .last_check
+                .as_ref()
+                .ok_or_else(|| external_error("no active check yet"))?;
+            int_result(last.roll.total)
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "check_score", true, move |_name, _args| {
+            let guard = state.borrow();
+            let last = guard
+                .last_check
+                .as_ref()
+                .ok_or_else(|| external_error("no active check yet"))?;
+            int_result(last.score)
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "check_target", true, move |_name, _args| {
+            let guard = state.borrow();
+            let last = guard
+                .last_check
+                .as_ref()
+                .ok_or_else(|| external_error("no active check yet"))?;
+            int_result(last.target)
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "check_margin", true, move |_name, _args| {
+            let guard = state.borrow();
+            let last = guard
+                .last_check
+                .as_ref()
+                .ok_or_else(|| external_error("no active check yet"))?;
+            int_result(last.margin)
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "check_degrees", true, move |_name, _args| {
+            let guard = state.borrow();
+            let last = guard
+                .last_check
+                .as_ref()
+                .ok_or_else(|| external_error("no active check yet"))?;
+            int_result(last.degrees)
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "check_die", true, move |_name, args| {
+            let guard = state.borrow();
+            let last = guard
+                .last_check
+                .as_ref()
+                .ok_or_else(|| external_error("no active check yet"))?;
+            let index = arg_int(args, 0);
+            if index < 0 {
+                return Err(external_error(format!(
+                    "check_die index {index} is out of range"
+                )));
+            }
+            let face = last.roll.dice.get(index as usize).copied().ok_or_else(|| {
+                external_error(format!("check_die index {index} is out of range"))
+            })?;
+            int_result(i32::from(face))
         })?;
     }
 
@@ -423,14 +541,9 @@ pub(crate) fn bind_external_functions(
                 .difficulty
                 .resolve(&state.rulebook)
                 .expect("cast validated difficulty");
-            state.checks.push(CheckRecord {
-                ability: spell.ability.clone(),
-                difficulty,
-                outcome: result.outcome.as_str().to_string(),
-                total: result.check.total,
-                dice: Some(result.check.dice),
-                breakdown: result.check.breakdown,
-            });
+            let record = CheckRecord::from_active(spell.ability.clone(), difficulty, &result.check);
+            state.checks.push(record);
+            state.last_check = Some(result.check.clone());
             state.changes.extend(result.changes);
             string_result(result.outcome.as_str())
         })?;
@@ -452,11 +565,36 @@ where
         .bind_external_function(
             name,
             move |name, args| {
+                if name == "roll_check" {
+                    if args.len() != 4 && args.len() != 5 {
+                        return Err(external_error(
+                            "roll_check expects 4 or 5 arguments".to_string(),
+                        ));
+                    }
+                    let expected = ['s', 'i', 's', 'i', 's'];
+                    for (index, argument) in args.iter().enumerate() {
+                        let want = expected[index];
+                        let valid = matches!(
+                            (want, argument),
+                            ('s', ValueType::String(_)) | ('i', ValueType::Int(_))
+                        );
+                        if !valid {
+                            let kind = if want == 's' { "string" } else { "integer" };
+                            return Err(external_error(format!(
+                                "{name} argument {} must be {kind}",
+                                index + 1
+                            )));
+                        }
+                    }
+                    return function(name, args);
+                }
                 let signature = match name {
-                    "roll_check" | "passive_check" => "sisi",
+                    "passive_check" => "sisi",
                     "passive_value" | "check_breakdown" => "ssi",
                     "spend_resource" | "restore_resource" => "si",
-                    "end_scene" => "",
+                    "check_die" => "i",
+                    "end_scene" | "check_roll" | "check_score" | "check_target"
+                    | "check_margin" | "check_degrees" => "",
                     _ => "s",
                 };
                 if args.len() != signature.len() {

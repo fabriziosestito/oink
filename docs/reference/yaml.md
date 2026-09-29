@@ -41,10 +41,13 @@ only. YAML keys and Ink function names stay the same.
 | `max` | integer | `10` | Highest starting value |
 | `default` | integer | `min` when building a character | Starting value unless overridden |
 | `bonus.thresholds` | list | Empty | Entries with integer `at` and `bonus` |
+| `bonus` | string | Threshold table | `direct` passes the stored value untouched |
 
 The loader sorts thresholds from highest to lowest. The highest threshold
 reached by the value supplies the bonus. Values below the lowest threshold use
 its bonus. An empty table returns 0 and produces a loader warning.
+Use `bonus: direct` for percentile systems where the characteristic forms the
+target base.
 
 ```yaml
 characteristics:
@@ -58,6 +61,11 @@ characteristics:
         - { at: 1, bonus: -2 }
         - { at: 10, bonus: 1 }
         - { at: 13, bonus: 2 }
+  weapon_skill:
+    name: Weapon Skill
+    min: 1
+    max: 100
+    bonus: direct
 ```
 
 ## Abilities and difficulties
@@ -101,10 +109,13 @@ See [checks and modifiers](checks.md) for stacking rules.
 
 ## Perks and conditions
 
-Perks accept `name`, `description`, `modifiers`, and `grants_tags`.
-Conditions accept those fields plus an optional nonnegative integer `duration`.
-The duration counts explicit `end_scene()` calls, as described in
-[scene boundaries](state.md#scene-boundaries).
+Perks accept `name`, `description`, `modifiers`, `grants_tags`, `advantage`,
+and `disadvantage`. Conditions accept those fields plus an optional nonnegative
+integer `duration`. The duration counts explicit `end_scene()` calls, as
+described in [scene boundaries](state.md#scene-boundaries).
+A perk or condition with `advantage: true` selects the profile advantage pool.
+One with `disadvantage: true` selects the disadvantage pool. Both together
+cancel to the base profile. Several sources on one side do not stack.
 
 ```yaml
 perks:
@@ -112,6 +123,9 @@ perks:
     name: Steady Hands
     modifiers:
       abilities: { climbing: 1 }
+  lucky:
+    name: Lucky
+    advantage: true
 conditions:
   shaken:
     name: Shaken
@@ -226,6 +240,49 @@ spells:
 Definitions load in all builds. Casting requires the `spells` feature.
 See the [Ink API](ink-api.md#spells) for cost and failure behavior.
 
+## Dice pools
+
+The `dice` section names the default profile and the named profiles. Each
+profile sets a notation string, a direction (`over` or `under`), a degrees
+formula (`margin`, `tens`, or `none`), an optional passive constant, optional
+advantage and disadvantage pool names, and an ordered outcome table. The first
+matching outcome row wins. A row without tests always matches. An unmatched
+table returns `failure` with a loader warning.
+
+```yaml
+dice:
+  default: standard
+  profiles:
+    standard:
+      notation: "2d6"
+      direction: over
+      degrees: margin
+      passive: 6
+      outcomes:
+        - { all_max: true, outcome: critical_success }
+        - { all_min: true, outcome: critical_failure }
+        - { margin_at_least: 5, outcome: critical_success }
+        - { margin_at_least: 0, outcome: success }
+        - { margin_at_least: -4, outcome: failure }
+        - { outcome: critical_failure }
+    wfrp:
+      notation: "d%"
+      direction: under
+      degrees: tens
+      outcomes:
+        - { score_at_most: 5, outcome: critical_success, degrees_min: 1 }
+        - { score_at_least: 96, outcome: critical_failure, degrees_max: -1 }
+        - { doubles: true, margin_at_least: 0, outcome: critical_success }
+        - { doubles: true, margin_at_most: -1, outcome: critical_failure }
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+```
+
+Supported dice are d2, d4, d6, d8, d10, d12, d20, and d%. Use keep notation
+for advantage pools, such as `2d20kh1` and `2d20kl1`. `d100` and `1d100`
+are aliases for `d%`. A plain `2d10` stays a sum. When the section is absent,
+the loader inserts the 2d6 standard profile above.
+
 ## Starting character
 
 ```yaml
@@ -246,9 +303,10 @@ Conditions and environments start empty.
 ## Loading errors and warnings
 
 The loader rejects malformed YAML, reversed bounds, invalid characteristic
-defaults, unknown ability parents, unknown grant targets, and unknown starting IDs.
-It also rejects unknown conditions applied by items and invalid spell references
-or negative spell costs.
+defaults, unknown ability parents, unknown grant targets, unknown starting IDs,
+bad dice notation, unknown die sizes, unknown dice defaults, and unknown
+advantage pools. It also rejects unknown conditions applied by items and
+invalid spell references or negative spell costs.
 
 Unknown tags used by abilities, grants, environments, spell checks, or tag
 modifiers produce warnings. Descriptive item tags need no registry entry.

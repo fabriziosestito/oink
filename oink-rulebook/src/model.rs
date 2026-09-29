@@ -46,6 +46,54 @@ pub struct BonusThreshold {
     pub bonus: i32,
 }
 
+/// How a characteristic contributes to a check.
+///
+/// A threshold table converts the stored value through `BonusTable`.
+/// The `direct` marker passes the stored value untouched, for percentile
+/// systems where the characteristic is the target base.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+pub enum CharacteristicBonus {
+    Direct(DirectMarker),
+    Table(BonusTable),
+}
+
+impl Default for CharacteristicBonus {
+    fn default() -> Self {
+        Self::Table(BonusTable::default())
+    }
+}
+
+impl CharacteristicBonus {
+    pub fn bonus_for(&self, value: i32) -> i32 {
+        match self {
+            Self::Direct(_) => value,
+            Self::Table(table) => table.bonus_for(value),
+        }
+    }
+
+    pub fn is_empty_table(&self) -> bool {
+        match self {
+            Self::Direct(_) => false,
+            Self::Table(table) => table.thresholds.is_empty(),
+        }
+    }
+
+    pub fn sort_thresholds(&mut self) {
+        if let Self::Table(table) = self {
+            table
+                .thresholds
+                .sort_by_key(|threshold| std::cmp::Reverse(threshold.at));
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DirectMarker {
+    Direct,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Characteristic {
     pub name: String,
@@ -58,7 +106,7 @@ pub struct Characteristic {
     #[serde(default)]
     pub default: Option<i32>,
     #[serde(default)]
-    pub bonus: BonusTable,
+    pub bonus: CharacteristicBonus,
 }
 
 impl Characteristic {
@@ -110,6 +158,10 @@ pub struct Perk {
     pub modifiers: Modifiers,
     #[serde(default)]
     pub grants_tags: Vec<String>,
+    #[serde(default)]
+    pub advantage: bool,
+    #[serde(default)]
+    pub disadvantage: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -123,6 +175,10 @@ pub struct Condition {
     pub grants_tags: Vec<String>,
     #[serde(default)]
     pub duration: Option<u32>,
+    #[serde(default)]
+    pub advantage: bool,
+    #[serde(default)]
+    pub disadvantage: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -218,6 +274,231 @@ pub struct StartingCharacter {
     pub resources: BTreeMap<String, i32>,
 }
 
+/// Which side of the comparison the character contribution joins.
+///
+/// `Over` adds dice plus contribution against difficulty.
+/// `Under` rolls dice alone against contribution plus difficulty.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    #[default]
+    Over,
+    Under,
+}
+
+/// How to compute degrees (margin of success) for a check.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Degrees {
+    #[default]
+    Margin,
+    Tens,
+    None,
+}
+
+/// One die size supported by the engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Die {
+    D2,
+    D4,
+    D6,
+    D8,
+    D10,
+    D12,
+    D20,
+    Percentile,
+}
+
+impl Die {
+    pub fn sides(self) -> u16 {
+        match self {
+            Self::D2 => 2,
+            Self::D4 => 4,
+            Self::D6 => 6,
+            Self::D8 => 8,
+            Self::D10 => 10,
+            Self::D12 => 12,
+            Self::D20 => 20,
+            Self::Percentile => 10,
+        }
+    }
+
+    pub fn from_faces(faces: u16) -> Option<Self> {
+        match faces {
+            2 => Some(Self::D2),
+            4 => Some(Self::D4),
+            6 => Some(Self::D6),
+            8 => Some(Self::D8),
+            10 => Some(Self::D10),
+            12 => Some(Self::D12),
+            20 => Some(Self::D20),
+            _ => None,
+        }
+    }
+}
+
+/// Which dice of a pool count toward the total.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Keep {
+    #[default]
+    All,
+    Highest(u16),
+    Lowest(u16),
+}
+
+/// A parsed dice pool, from notation such as `2d6` or `2d20kh1`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DicePool {
+    pub count: u16,
+    pub die: Die,
+    pub keep: Keep,
+}
+
+impl Default for DicePool {
+    fn default() -> Self {
+        Self {
+            count: 2,
+            die: Die::D6,
+            keep: Keep::All,
+        }
+    }
+}
+
+/// One row of a profile outcome table. Fields in one row combine with AND.
+/// The first matching row wins. A row without tests always matches.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct OutcomeRule {
+    pub all_max: bool,
+    pub all_min: bool,
+    pub any_max: bool,
+    pub any_min: bool,
+    pub doubles: bool,
+    pub score_at_least: Option<i32>,
+    pub score_at_most: Option<i32>,
+    pub margin_at_least: Option<i32>,
+    pub margin_at_most: Option<i32>,
+    pub degrees_at_least: Option<i32>,
+    pub degrees_at_most: Option<i32>,
+    pub target_at_least: Option<i32>,
+    pub target_at_most: Option<i32>,
+    pub degrees_min: Option<i32>,
+    pub degrees_max: Option<i32>,
+    pub outcome: Outcome,
+}
+
+/// Active-check outcome, with Ink-compatible snake_case names.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Outcome {
+    CriticalFailure,
+    #[default]
+    Failure,
+    Success,
+    CriticalSuccess,
+}
+
+impl Outcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Outcome::CriticalFailure => "critical_failure",
+            Outcome::Failure => "failure",
+            Outcome::Success => "success",
+            Outcome::CriticalSuccess => "critical_success",
+        }
+    }
+
+    pub fn is_success(self) -> bool {
+        matches!(self, Outcome::Success | Outcome::CriticalSuccess)
+    }
+}
+
+/// One named dice profile: notation plus direction, degrees, passive,
+/// advantage pools, and the ordered outcome table.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiceProfile {
+    pub notation: String,
+    #[serde(default)]
+    pub direction: Direction,
+    #[serde(default)]
+    pub degrees: Degrees,
+    #[serde(default)]
+    pub passive: Option<i32>,
+    #[serde(default)]
+    pub advantage: Option<String>,
+    #[serde(default)]
+    pub disadvantage: Option<String>,
+    #[serde(skip, default)]
+    pub pool: DicePool,
+    #[serde(default)]
+    pub outcomes: Vec<OutcomeRule>,
+}
+
+/// Dice section of the rulebook: default profile plus named profiles.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct DiceConfig {
+    pub default: String,
+    pub profiles: BTreeMap<String, DiceProfile>,
+}
+
+impl Default for DiceConfig {
+    fn default() -> Self {
+        let mut profiles = BTreeMap::new();
+        profiles.insert(
+            "standard".to_string(),
+            DiceProfile {
+                notation: "2d6".to_string(),
+                direction: Direction::Over,
+                degrees: Degrees::Margin,
+                passive: Some(6),
+                advantage: None,
+                disadvantage: None,
+                pool: DicePool {
+                    count: 2,
+                    die: Die::D6,
+                    keep: Keep::All,
+                },
+                outcomes: vec![
+                    OutcomeRule {
+                        all_max: true,
+                        outcome: Outcome::CriticalSuccess,
+                        ..Default::default()
+                    },
+                    OutcomeRule {
+                        all_min: true,
+                        outcome: Outcome::CriticalFailure,
+                        ..Default::default()
+                    },
+                    OutcomeRule {
+                        margin_at_least: Some(5),
+                        outcome: Outcome::CriticalSuccess,
+                        ..Default::default()
+                    },
+                    OutcomeRule {
+                        margin_at_least: Some(0),
+                        outcome: Outcome::Success,
+                        ..Default::default()
+                    },
+                    OutcomeRule {
+                        margin_at_least: Some(-4),
+                        outcome: Outcome::Failure,
+                        ..Default::default()
+                    },
+                    OutcomeRule {
+                        outcome: Outcome::CriticalFailure,
+                        ..Default::default()
+                    },
+                ],
+            },
+        );
+        Self {
+            default: "standard".to_string(),
+            profiles,
+        }
+    }
+}
+
 /// The full rulebook: every resource definition plus the starting character.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -233,5 +514,6 @@ pub struct Rulebook {
     pub items: BTreeMap<String, Item>,
     pub resources: BTreeMap<String, Resource>,
     pub spells: BTreeMap<String, Spell>,
+    pub dice: DiceConfig,
     pub starting_character: StartingCharacter,
 }

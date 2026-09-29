@@ -105,13 +105,30 @@ pub struct CheckRequest<'a> {
     pub difficulty: i32,
     pub tags: &'a [&'a str],
     pub modifier: i32,
+    pub pool: Option<&'a str>,
 }
 
 pub struct CheckResult {
     pub outcome: Outcome,
-    pub total: i32,
-    pub dice: [u8; 2],
+    pub pool: String,
+    pub score: i32,
+    pub target: i32,
+    pub margin: i32,
+    pub degrees: i32,
+    pub roll: DiceRoll,
     pub breakdown: Breakdown,
+}
+
+pub struct DiceRoll {
+    pub kind: RollKind,
+    pub dice: Vec<u16>,
+    pub kept: Vec<bool>,
+    pub total: i32,
+}
+
+pub enum RollKind {
+    Sum,
+    Percentile,
 }
 
 pub struct PassiveResult {
@@ -123,7 +140,7 @@ pub struct PassiveResult {
 ```
 
 Build a request with `CheckRequest::new(ability, difficulty)`, then use
-`with_tags(tags)` and `with_modifier(value)` when needed.
+`with_tags(tags)`, `with_modifier(value)`, and `with_pool(name)` when needed.
 `Checks::new(&rulebook, &character)` creates a borrowed resolver.
 
 | Method | Result |
@@ -133,13 +150,20 @@ Build a request with `CheckRequest::new(ability, difficulty)`, then use
 | `breakdown(&self, ability, tags, modifier)` | `Result<Breakdown, CheckError>` |
 
 An unknown ability returns `CheckError::UnknownAbility`.
+An unknown profile returns `CheckError::UnknownPool`.
 `Outcome` has `CriticalFailure`, `Failure`, `Success`, and `CriticalSuccess`.
 Use `as_str()` for the Ink-compatible result or `is_success()` for a boolean.
 
 ```rust
 pub trait Dice {
-    fn roll_d6(&mut self) -> u8;
+    fn roll(&mut self, sides: u16) -> u16;
 }
+
+pub struct DiceConfig {
+    pub default: String,
+    pub profiles: BTreeMap<String, DiceProfile>,
+}
+```
 
 pub struct BreakdownEntry {
     pub source: String,
@@ -151,9 +175,11 @@ pub struct Breakdown {
 }
 ```
 
-A custom dice source must return values from 1 through 6.
-`SeededDice::new(seed)` uses SplitMix64 for repeatable rolls.
+A custom dice source must return values from 1 through the requested sides.
+`SeededDice::new(seed)` uses SplitMix64 with rejection sampling for repeatable rolls.
 `SystemDice::new()` seeds that generator from the host clock and process ID.
+`DiceConfig::default()` returns the 2d6 standard profile. `parse_notation()`
+parses pool strings such as `2d6`, `2d20kh1`, and `d%`.
 `Breakdown::total()` sums contributions. Its `Display` implementation formats
 the list and subtotal. Zero contributions are omitted.
 
