@@ -1,0 +1,521 @@
+/**
+ * oink documentation theme.
+ *
+ * Base look: "paper and ink", styled after an e-reader screen and the Kitten
+ * Noctalia palette. Two display modes, switched from the navbar:
+ *
+ *   - e-paper (default): warm paper grays, no color, dithered art.
+ *   - color: warm paper with muted red, ochre, pink, slate, and green accents.
+ *
+ * The mode lives on <html data-display="epaper|color">. The light/dark
+ * toggle keeps working on top of either mode.
+ */
+
+@import '@fontsource/literata/400.css';
+@import '@fontsource/literata/400-italic.css';
+@import '@fontsource/literata/600.css';
+@import '@fontsource/literata/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/* -------------------------------------------------------------------------
+ * Tokens
+ * ---------------------------------------------------------------------- */
+
+/* E-paper, light (default, also the no-JavaScript look). */
+:root {
+  --oink-bg: #ded9ca;
+  --oink-bg-alt: #d4cdbc;
+  --oink-bg-raised: #e4e0d3;
+  --oink-text: #52504a;
+  --oink-text-strong: #33312c;
+  --oink-text-soft: #767064;
+  --oink-line: #b8ae95;
+  --oink-line-soft: #cbc2ac;
+  --oink-link: #38362f;
+  --oink-link-hover: #000000;
+  --oink-primary: #3a3833;
+  --oink-on-primary: #e6e2d6;
+  --oink-code-bg: #d2cbb9;
+  --oink-code-text: #38362f;
+  --oink-pre-bg: #d8d2c1;
+  --oink-navbar-bg: #e2ddcf;
+  --oink-footer-bg: #d6cfbf;
+  --oink-shadow: none;
+
+  --oink-success: #3f4a41;
+  --oink-info: #434850;
+  --oink-warning: #5a4f32;
+  --oink-danger: #5a3a3a;
+  --oink-success-bg: #e0ded1;
+  --oink-info-bg: #dedbd3;
+  --oink-warning-bg: #e6e0cc;
+  --oink-danger-bg: #e2d8d0;
+}
+
+/* E-paper, night. */
+:root[data-display='epaper'][data-theme='dark'] {
+  --oink-bg: #232323;
+  --oink-bg-alt: #292929;
+  --oink-bg-raised: #2e2e2e;
+  --oink-text: #a8a8a8;
+  --oink-text-strong: #dcdcdc;
+  --oink-text-soft: #7d7d7d;
+  --oink-line: #3f3f3f;
+  --oink-line-soft: #333333;
+  --oink-link: #d7d7d7;
+  --oink-link-hover: #ffffff;
+  --oink-primary: #d7d7d7;
+  --oink-on-primary: #232323;
+  --oink-code-bg: #1d1d1d;
+  --oink-code-text: #c9c9c9;
+  --oink-pre-bg: #1c1c1c;
+  --oink-navbar-bg: #262626;
+  --oink-footer-bg: #1f1f1f;
+  --oink-shadow: none;
+
+  --oink-success: #9fb3a2;
+  --oink-info: #9fa8b3;
+  --oink-warning: #c2b183;
+  --oink-danger: #c29393;
+  --oink-success-bg: #282c28;
+  --oink-info-bg: #282a2d;
+  --oink-warning-bg: #2d2b24;
+  --oink-danger-bg: #2d2626;
+}
+
+/* Color, light. */
+:root[data-display='color'] {
+  --oink-bg: #efeade;
+  --oink-bg-alt: #e6dfcd;
+  --oink-bg-raised: #f6f2e8;
+  --oink-text: #4a4842;
+  --oink-text-strong: #34322d;
+  --oink-text-soft: #6f6a5e;
+  --oink-line: #c6b99c;
+  --oink-line-soft: #d8cdb4;
+  --oink-link: #96292b;
+  --oink-link-hover: #6f1d1e;
+  --oink-primary: #96292b;
+  --oink-on-primary: #f6f2e8;
+  --oink-code-bg: #e9e1cf;
+  --oink-code-text: #4a342f;
+  --oink-pre-bg: #e3dcc9;
+  --oink-navbar-bg: #f2ede1;
+  --oink-footer-bg: #e6dfcd;
+  --oink-shadow: none;
+
+  --oink-success: #417a4f;
+  --oink-info: #466a81;
+  --oink-warning: #8a6d12;
+  --oink-danger: #a04a4a;
+  --oink-success-bg: #dcead9;
+  --oink-info-bg: #dbe6ef;
+  --oink-warning-bg: #f0e6c4;
+  --oink-danger-bg: #f1dcdc;
+}
+
+/* Color, night. */
+:root[data-display='color'][data-theme='dark'] {
+  --oink-bg: #232323;
+  --oink-bg-alt: #2a2a2a;
+  --oink-bg-raised: #2f2f2f;
+  --oink-text: #b4b4b4;
+  --oink-text-strong: #e6e6e6;
+  --oink-text-soft: #8a8a8a;
+  --oink-line: #414141;
+  --oink-line-soft: #363636;
+  --oink-link: #d98c8c;
+  --oink-link-hover: #eaa9a9;
+  --oink-primary: #d98c8c;
+  --oink-on-primary: #232323;
+  --oink-code-bg: #1d1d1d;
+  --oink-code-text: #c9c9c9;
+  --oink-pre-bg: #1e1e1e;
+  --oink-navbar-bg: #262626;
+  --oink-footer-bg: #1f1f1f;
+  --oink-shadow: none;
+
+  --oink-success: #8bc48f;
+  --oink-info: #8da8b9;
+  --oink-warning: #d4b45a;
+  --oink-danger: #d98c8c;
+  --oink-success-bg: #242c24;
+  --oink-info-bg: #232a2e;
+  --oink-warning-bg: #2d2a20;
+  --oink-danger-bg: #2f2424;
+}
+
+/* -------------------------------------------------------------------------
+ * Infima mapping
+ * ---------------------------------------------------------------------- */
+
+:root {
+  --ifm-font-family-base: 'Literata', 'Iowan Old Style', 'Palatino', Georgia,
+    serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', ui-monospace,
+    SFMono-Regular, Menlo, monospace;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+  --ifm-heading-font-weight: 600;
+  --ifm-font-size-base: 17px;
+  --ifm-line-height-base: 1.75;
+  --ifm-code-font-size: 85%;
+  --ifm-global-radius: 2px;
+  --ifm-button-border-radius: 2px;
+  --ifm-card-border-radius: 2px;
+  --ifm-tabs-border-radius: 2px;
+  --ifm-breadcrumb-border-radius: 2px;
+  --ifm-alert-border-radius: 2px;
+  --ifm-alert-border-width: 1px;
+  --ifm-alert-border-left-width: 4px;
+  --ifm-toc-border-color: var(--oink-line-soft);
+  --ifm-table-border-color: var(--oink-line-soft);
+  --ifm-menu-color-background-active: var(--oink-bg-raised);
+  --ifm-menu-color-background-hover: var(--oink-bg-alt);
+}
+
+/* Colors follow the display mode. */
+:root,
+:root[data-display='epaper'] {
+  --ifm-background-color: var(--oink-bg);
+  --ifm-background-surface-color: var(--oink-bg-raised);
+  --ifm-color-content: var(--oink-text);
+  --ifm-color-content-secondary: var(--oink-text-soft);
+  --ifm-heading-color: var(--oink-text-strong);
+  --ifm-link-color: var(--oink-link);
+  --ifm-link-hover-color: var(--oink-link-hover);
+  --ifm-color-primary: var(--oink-primary);
+  --ifm-color-primary-dark: var(--oink-primary);
+  --ifm-color-primary-darker: var(--oink-primary);
+  --ifm-color-primary-darkest: var(--oink-primary);
+  --ifm-color-primary-light: var(--oink-primary);
+  --ifm-color-primary-lighter: var(--oink-primary);
+  --ifm-color-primary-lightest: var(--oink-primary);
+  --ifm-color-emphasis-300: var(--oink-line);
+  --ifm-hr-background-color: var(--oink-line);
+  --ifm-navbar-background-color: var(--oink-navbar-bg);
+  --ifm-navbar-shadow: var(--oink-shadow);
+  --ifm-footer-background-color: var(--oink-footer-bg);
+  --ifm-footer-color: var(--oink-text);
+  --ifm-footer-link-color: var(--oink-text);
+  --ifm-footer-title-color: var(--oink-text-strong);
+  --ifm-code-background: var(--oink-code-bg);
+  --ifm-code-color: var(--oink-code-text);
+  --ifm-pre-background: var(--oink-pre-bg);
+  --ifm-blockquote-color: var(--oink-text-soft);
+  --ifm-table-stripe-background: var(--oink-bg-alt);
+  --ifm-table-head-background: var(--oink-bg-raised);
+  --ifm-pagination-nav-color-hover: var(--oink-line);
+  --ifm-breadcrumb-color-active: var(--oink-text-strong);
+  --ifm-breadcrumb-item-background-active: var(--oink-bg-raised);
+  --ifm-color-success: var(--oink-success);
+  --ifm-color-success-contrast-background: var(--oink-success-bg);
+  --ifm-color-success-contrast-foreground: var(--oink-text-strong);
+  --ifm-color-info: var(--oink-info);
+  --ifm-color-info-contrast-background: var(--oink-info-bg);
+  --ifm-color-info-contrast-foreground: var(--oink-text-strong);
+  --ifm-color-warning: var(--oink-warning);
+  --ifm-color-warning-contrast-background: var(--oink-warning-bg);
+  --ifm-color-warning-contrast-foreground: var(--oink-text-strong);
+  --ifm-color-danger: var(--oink-danger);
+  --ifm-color-danger-contrast-background: var(--oink-danger-bg);
+  --ifm-color-danger-contrast-foreground: var(--oink-text-strong);
+  --ifm-color-secondary: var(--oink-text-soft);
+  --ifm-color-secondary-contrast-background: var(--oink-bg-alt);
+  --ifm-color-secondary-contrast-foreground: var(--oink-text-strong);
+}
+
+/* -------------------------------------------------------------------------
+ * Base
+ * ---------------------------------------------------------------------- */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--ifm-background-color);
+  /* Faint paper grain. It sits behind the content. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='0.16'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  letter-spacing: -0.01em;
+}
+
+/* E-paper mode renders art and code as grayscale, like a 16-level screen. */
+html[data-display='epaper'] img {
+  filter: grayscale(1) contrast(1.06);
+}
+
+html[data-display='epaper'] pre,
+html[data-display='epaper'] .theme-code-block {
+  filter: grayscale(1);
+}
+
+/* -------------------------------------------------------------------------
+ * Navbar
+ * ---------------------------------------------------------------------- */
+
+.navbar {
+  border-bottom: 1px solid var(--oink-line);
+  box-shadow: none;
+}
+
+.navbar__title {
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.navbar__logo img {
+  border-radius: 2px;
+}
+
+.navbar__link {
+  font-size: 0.94rem;
+}
+
+/* -------------------------------------------------------------------------
+ * Display mode toggle
+ * ---------------------------------------------------------------------- */
+
+.oink-display-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--oink-line);
+  border-radius: 2px;
+  margin-right: 0.4rem;
+}
+
+.oink-display-toggle__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 1px;
+  color: var(--oink-text-soft);
+  line-height: 1;
+}
+
+.oink-display-toggle__button:hover {
+  color: var(--oink-text-strong);
+}
+
+.oink-display-toggle__icon {
+  display: block;
+}
+
+.oink-display-toggle__label {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The active side follows data-display, so it is correct before hydration. */
+html[data-display='epaper'] .oink-display-toggle__button[data-mode='epaper'],
+html[data-display='color'] .oink-display-toggle__button[data-mode='color'],
+html:not([data-display]) .oink-display-toggle__button[data-mode='epaper'] {
+  background: var(--oink-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--oink-line);
+  color: var(--oink-text-strong);
+}
+
+@media (max-width: 996px) {
+  .oink-display-toggle__label {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Search (docusaurus-search-local)
+ * ---------------------------------------------------------------------- */
+
+.navbar__search-input {
+  background: var(--oink-bg-raised);
+  border: 1px solid var(--oink-line);
+  border-radius: 2px;
+  color: var(--oink-text);
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.9rem;
+}
+
+.navbar__search-input::placeholder {
+  color: var(--oink-text-soft);
+}
+
+/* -------------------------------------------------------------------------
+ * Sidebar and table of contents
+ * ---------------------------------------------------------------------- */
+
+.menu__link {
+  border-radius: 2px;
+  font-size: 0.95rem;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  font-weight: 600;
+  color: var(--oink-text-strong);
+  box-shadow: inset 2px 0 0 var(--oink-primary);
+}
+
+.menu__list-item-collapsible:hover {
+  background: var(--oink-bg-alt);
+}
+
+.table-of-contents__link {
+  font-size: 0.85rem;
+}
+
+.table-of-contents__link--active {
+  color: var(--oink-text-strong);
+  font-weight: 600;
+}
+
+.table-of-contents__left-border {
+  border-left: 1px solid var(--oink-line-soft);
+}
+
+/* -------------------------------------------------------------------------
+ * Docs content
+ * ---------------------------------------------------------------------- */
+
+.markdown a {
+  text-underline-offset: 0.16em;
+}
+
+.markdown > h1 {
+  letter-spacing: -0.02em;
+}
+
+.markdown > h2 {
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--oink-line-soft);
+}
+
+.markdown code {
+  border: 1px solid var(--oink-line-soft);
+  border-radius: 2px;
+}
+
+.theme-code-block {
+  border: 1px solid var(--oink-line);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.theme-code-block-highlighted-line {
+  background-color: rgb(0 0 0 / 6%);
+  border-left: 3px solid var(--oink-line);
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--oink-line);
+  background: var(--oink-bg-alt);
+  padding: 0.6rem 1rem;
+  border-radius: 0 2px 2px 0;
+}
+
+.markdown table {
+  border: 1px solid var(--oink-line);
+}
+
+.markdown table thead tr {
+  border-bottom: 1px solid var(--oink-line);
+}
+
+.markdown table tr:nth-child(2n) {
+  background: var(--oink-bg-alt);
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: var(--oink-text);
+}
+
+.pagination-nav__link {
+  border: 1px solid var(--oink-line);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--oink-text-soft);
+}
+
+/* Admonitions are flat blocks with a thick left rule. */
+.alert {
+  box-shadow: none;
+}
+
+.theme-admonition {
+  border-radius: 2px;
+}
+
+/* -------------------------------------------------------------------------
+ * Buttons
+ * ---------------------------------------------------------------------- */
+
+.button {
+  border-width: 1px;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.button--primary {
+  color: var(--oink-on-primary);
+  background-color: var(--oink-primary);
+  border-color: var(--oink-primary);
+}
+
+.button--primary:hover {
+  color: var(--oink-on-primary);
+  background-color: var(--oink-text-soft);
+  border-color: var(--oink-text-soft);
+}
+
+.button--outline {
+  color: var(--oink-text-strong);
+  border-color: var(--oink-text-strong);
+}
+
+.button--outline:hover {
+  color: var(--oink-bg);
+  background-color: var(--oink-text-strong);
+  border-color: var(--oink-text-strong);
+}
+
+/* -------------------------------------------------------------------------
+ * Footer
+ * ---------------------------------------------------------------------- */
+
+.footer {
+  border-top: 1px solid var(--oink-line);
+}
+
+.footer__title {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.footer__link-item {
+  font-size: 0.92rem;
+}
+
+.footer__copyright {
+  font-size: 0.82rem;
+  color: var(--oink-text-soft);
+}
