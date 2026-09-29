@@ -107,6 +107,7 @@ pub enum StateChange {
     PerkAdded(String),
     PerkRemoved(String),
     ConditionAdded(String),
+    ConditionRefreshed(String),
     ConditionRemoved(String),
     EnvironmentEntered(String),
     EnvironmentCleared(String),
@@ -120,6 +121,8 @@ pub enum StateChange {
 `Display` supplies default text through `change.to_string()`.
 `Engine::take_changes()` returns and empties the queue. Records accumulate until
 the host drains them; the queue does not reset at scene boundaries.
+Re-adding an active condition with a different duration emits
+`StateChange::ConditionRefreshed`; the same duration emits nothing.
 The simulator currently displays check records but does not drain state-change notices.
 
 ## Story facts and saving

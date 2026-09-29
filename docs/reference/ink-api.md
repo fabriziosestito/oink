@@ -76,7 +76,7 @@ EXTERNAL remove_item(id)
 | `add_perk(id)` | void | Adds a known perk and applies grants |
 | `remove_perk(id)` | void | Removes it if present |
 | `has_condition(id)` | boolean | Tests whether a condition is active |
-| `add_condition(id)` | void | Adds a known condition with its configured duration, or resets an existing duration |
+| `add_condition(id)` | void | Adds a known condition with its configured duration, or resets it and emits a refresh notice |
 | `remove_condition(id)` | void | Removes it if present |
 | `has_tag(tag)` | boolean | Tests character, perk, condition, and carried-item tags |
 

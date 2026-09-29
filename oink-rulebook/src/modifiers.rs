@@ -29,8 +29,12 @@ impl Breakdown {
         }
     }
 
+    /// The sum of all entries, clamped to the `i32` range. Extreme modifier
+    /// values saturate instead of overflowing.
     pub fn total(&self) -> i32 {
-        self.entries.iter().map(|entry| entry.value).sum()
+        self.entries
+            .iter()
+            .fold(0, |total, entry| total.saturating_add(entry.value))
     }
 }
 

@@ -5,6 +5,9 @@
 //!
 //! Passive checks roll nothing. Their value is
 //! `characteristic bonus + ability level + modifiers + 6`.
+//!
+//! Totals use saturating arithmetic, so extreme modifiers clamp at the `i32`
+//! limits instead of overflowing.
 
 use crate::dice::Dice;
 use crate::model::Rulebook;
@@ -203,7 +206,8 @@ impl<'a> Checks<'a> {
     ) -> Result<CheckResult, CheckError> {
         let breakdown = self.breakdown(request.ability, request.tags, request.modifier)?;
         let rolls = [dice.roll_d6(), dice.roll_d6()];
-        let total = i32::from(rolls[0]) + i32::from(rolls[1]) + breakdown.total();
+        let dice_total = i32::from(rolls[0]).saturating_add(i32::from(rolls[1]));
+        let total = dice_total.saturating_add(breakdown.total());
         let outcome = match rolls {
             [1, 1] => Outcome::CriticalFailure,
             [6, 6] => Outcome::CriticalSuccess,

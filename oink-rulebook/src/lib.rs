@@ -271,6 +271,33 @@ characteristics:
     }
 
     #[test]
+    fn extreme_modifiers_saturate_instead_of_overflowing() {
+        let rulebook = fixture();
+        let character = Character::from_starting(&rulebook);
+        let checks = Checks::new(&rulebook, &character);
+
+        let request = CheckRequest::new("logic", 10).with_modifier(i32::MAX);
+        let mut dice = ScriptedDice::new(&[2, 2]);
+        let result = checks.active(&mut dice, &request).unwrap();
+        assert_eq!(result.total, i32::MAX);
+        assert_eq!(result.outcome, Outcome::Success);
+
+        let result = checks.passive(&request).unwrap();
+        assert_eq!(result.value, i32::MAX);
+        assert!(result.passed);
+
+        let mut breakdown = Breakdown::default();
+        breakdown.push("high", i32::MAX);
+        breakdown.push("higher", i32::MAX);
+        assert_eq!(breakdown.total(), i32::MAX);
+
+        let mut breakdown = Breakdown::default();
+        breakdown.push("low", i32::MIN);
+        breakdown.push("lower", i32::MIN);
+        assert_eq!(breakdown.total(), i32::MIN);
+    }
+
+    #[test]
     fn conditions_modify_and_expire() {
         let rulebook = fixture();
         let mut character = Character::from_starting(&rulebook);
@@ -299,6 +326,36 @@ characteristics:
     }
 
     #[test]
+    fn reapplying_a_condition_emits_a_refresh_only_when_the_duration_changes() {
+        let rulebook = fixture();
+        let mut character = Character::from_starting(&rulebook);
+
+        let changes = character.add_condition(&rulebook, "shaken");
+        assert_eq!(
+            changes,
+            vec![StateChange::ConditionAdded("shaken".to_string())]
+        );
+
+        assert!(character.add_condition(&rulebook, "shaken").is_empty());
+
+        let changes = character.add_timed_condition(&rulebook, "shaken", Some(5));
+        assert_eq!(
+            changes,
+            vec![StateChange::ConditionRefreshed("shaken".to_string())]
+        );
+
+        let changes = character.add_timed_condition(&rulebook, "shaken", None);
+        assert_eq!(
+            changes,
+            vec![StateChange::ConditionRefreshed("shaken".to_string())]
+        );
+
+        assert!(character
+            .add_timed_condition(&rulebook, "shaken", None)
+            .is_empty());
+    }
+
+    #[test]
     fn tag_grants_chain_until_stable() {
         let rulebook = fixture();
         let mut character = Character::from_starting(&rulebook);
@@ -309,6 +366,33 @@ characteristics:
         assert!(changes.contains(&StateChange::PerkAdded("bookworm".to_string())));
         assert!(character.has_perk("bookworm"));
         assert!(character.has_ability("arcana"));
+    }
+
+    #[test]
+    fn long_grant_chains_apply_every_grant() {
+        const DEPTH: usize = 40;
+        let mut yaml = String::from("tags:\n");
+        for i in 0..DEPTH {
+            yaml.push_str(&format!(
+                "  t{i}:\n    name: Tag {i}\n    grants:\n      perks: [p{i}]\n"
+            ));
+        }
+        yaml.push_str("perks:\n");
+        for i in 0..DEPTH {
+            yaml.push_str(&format!("  p{i}:\n    name: Perk {i}\n"));
+            if i + 1 < DEPTH {
+                yaml.push_str(&format!("    grants_tags: [t{}]\n", i + 1));
+            }
+        }
+
+        let rulebook = Rulebook::load(&yaml)
+            .expect("chain rulebook loads")
+            .rulebook;
+        let mut character = Character::from_starting(&rulebook);
+        character.add_tag(&rulebook, "t0");
+        for i in 0..DEPTH {
+            assert!(character.has_perk(&format!("p{i}")), "p{i} was not granted");
+        }
     }
 
     #[test]
