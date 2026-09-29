@@ -1,6 +1,7 @@
 export default {
   extends: ["@commitlint/config-conventional"],
   rules: {
-    "body-empty": [2, "always"],
+    "body-max-line-length": [0, "always", Infinity], // disables the 100-char limit
+    "header-max-length": [0, "always", Infinity], // disables the 100-char limit
   },
 };

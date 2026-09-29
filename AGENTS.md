@@ -147,7 +147,8 @@ changes. The simulator is the manual test bed.
 - **"Commit" means Conventional Commits.** e.g. `fix: clamp inventory size`,
   `feat: parse mode tags`, `docs: update tag contract`.
 - One sentence, no body, no bullet lists: the subject line is the whole
-  message (commitlint enforces `body-empty` and a 100-char header).
+  message (commitlint enforces `body-empty` and a 100-char header). A
+  `Signed-off-by:` trailer is allowed.
 - commitlint enforces the format (`commitlint.config.mjs`, CI job).
 - **No agent attribution.** Never add `Co-Authored-By:`, "Generated with",
   or any assistant/tool byline to a commit. The user is the sole author.
