@@ -508,6 +508,75 @@ EXTERNAL passive_value(ability, tags, modifier)
     }
 
     #[test]
+    fn perk_condition_and_value_bindings_work_end_to_end() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL ability_level(id)
+EXTERNAL characteristic(id)
+EXTERNAL characteristic_bonus(id)
+EXTERNAL add_perk(id)
+EXTERNAL remove_perk(id)
+EXTERNAL has_perk(id)
+EXTERNAL add_condition(id)
+EXTERNAL remove_condition(id)
+
+Logic {ability_level("logic")}, absent {ability_level("lockpicking")}.
+Intellect {characteristic("intellect")}, bonus {characteristic_bonus("intellect")}.
+~ add_perk("night_vision")
+{ has_perk("night_vision"): Night eyes.|No night eyes.}
+~ remove_perk("night_vision")
+{ has_perk("night_vision"): Still night eyes.|Night eyes gone.}
+~ add_condition("nicotine_rush")
+~ remove_condition("nicotine_rush")
+-> END
+"#,
+        );
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        let joined = text.join(" ");
+        assert!(joined.contains("Logic 1, absent 0."), "{joined}");
+        assert!(joined.contains("Intellect 3, bonus -2."), "{joined}");
+        assert!(joined.contains("Night eyes."), "{joined}");
+        assert!(joined.contains("Night eyes gone."), "{joined}");
+        assert_eq!(
+            engine.take_changes(),
+            vec![
+                StateChange::PerkAdded("night_vision".to_string()),
+                StateChange::PerkRemoved("night_vision".to_string()),
+                StateChange::ConditionAdded("nicotine_rush".to_string()),
+                StateChange::ConditionRemoved("nicotine_rush".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn unknown_perk_and_characteristic_produce_story_errors() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL add_perk(id)
+~ add_perk("nope")
+-> END
+"#,
+        );
+        let error = engine.start().unwrap_err();
+        assert!(error.to_string().contains("unknown perk `nope`"), "{error}");
+
+        let mut engine = example_engine(
+            r#"
+EXTERNAL characteristic(id)
+{characteristic("nope")}
+-> END
+"#,
+        );
+        let error = engine.start().unwrap_err();
+        assert!(
+            error.to_string().contains("unknown characteristic `nope`"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn reference_ink_examples_compile_and_run() {
         let overview = include_str!("../../docs/rulebook.md");
         let minimal_yaml = overview
