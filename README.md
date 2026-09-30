@@ -3,6 +3,7 @@
 # oink 🐽
 
 [![CI](https://github.com/fabriziosestito/oink/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosestito/oink/actions/workflows/ci.yml)
+[![Docs](https://github.com/fabriziosestito/oink/actions/workflows/docs.yml/badge.svg)](https://github.com/fabriziosestito/oink/actions/workflows/docs.yml)
 
 oink is a *librogame*
 ([gamebook](https://en.wikipedia.org/wiki/Gamebook)) engine for e-ink devices.
