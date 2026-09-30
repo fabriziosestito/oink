@@ -11,8 +11,7 @@ the build configuration live in `website/`; all content stays in `docs/`.
 
 ## Run the site locally
 
-Install Node 20 or newer. For people who use asdf, `website/.tool-versions`
-pins a working version.
+Install Node 20 or newer.
 
 ```sh
 make docs
