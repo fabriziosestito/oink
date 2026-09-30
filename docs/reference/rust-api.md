@@ -166,7 +166,6 @@ pub struct DiceConfig {
     pub default: String,
     pub profiles: BTreeMap<String, DiceProfile>,
 }
-```
 
 pub struct BreakdownEntry {
     pub source: String,
