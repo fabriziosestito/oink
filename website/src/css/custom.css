@@ -4,10 +4,11 @@
  * Base look: "paper and ink", styled after an e-reader screen and the Kitten
  * Noctalia palette. Two display modes, switched from the navbar:
  *
- *   - e-paper (default): warm paper grays, no color, dithered art.
- *   - color: warm paper with muted red, ochre, pink, slate, and green accents.
+ *   - color (default): warm paper with muted red, ochre, pink, slate, and
+ *     green accents.
+ *   - e-paper: warm paper grays, no color, dithered art.
  *
- * The mode lives on <html data-display="epaper|color">. The light/dark
+ * The mode lives on <html data-display="color|epaper">. The light/dark
  * toggle keeps working on top of either mode.
  */
 
@@ -22,70 +23,8 @@
  * Tokens
  * ---------------------------------------------------------------------- */
 
-/* E-paper, light (default, also the no-JavaScript look). */
+/* Color, light (default, also the no-JavaScript look). */
 :root {
-  --oink-bg: #ded9ca;
-  --oink-bg-alt: #d4cdbc;
-  --oink-bg-raised: #e4e0d3;
-  --oink-text: #52504a;
-  --oink-text-strong: #33312c;
-  --oink-text-soft: #767064;
-  --oink-line: #b8ae95;
-  --oink-line-soft: #cbc2ac;
-  --oink-link: #38362f;
-  --oink-link-hover: #000000;
-  --oink-primary: #3a3833;
-  --oink-on-primary: #e6e2d6;
-  --oink-code-bg: #d2cbb9;
-  --oink-code-text: #38362f;
-  --oink-pre-bg: #d8d2c1;
-  --oink-navbar-bg: #e2ddcf;
-  --oink-footer-bg: #d6cfbf;
-  --oink-shadow: none;
-
-  --oink-success: #3f4a41;
-  --oink-info: #434850;
-  --oink-warning: #5a4f32;
-  --oink-danger: #5a3a3a;
-  --oink-success-bg: #e0ded1;
-  --oink-info-bg: #dedbd3;
-  --oink-warning-bg: #e6e0cc;
-  --oink-danger-bg: #e2d8d0;
-}
-
-/* E-paper, night. */
-:root[data-display='epaper'][data-theme='dark'] {
-  --oink-bg: #232323;
-  --oink-bg-alt: #292929;
-  --oink-bg-raised: #2e2e2e;
-  --oink-text: #a8a8a8;
-  --oink-text-strong: #dcdcdc;
-  --oink-text-soft: #7d7d7d;
-  --oink-line: #3f3f3f;
-  --oink-line-soft: #333333;
-  --oink-link: #d7d7d7;
-  --oink-link-hover: #ffffff;
-  --oink-primary: #d7d7d7;
-  --oink-on-primary: #232323;
-  --oink-code-bg: #1d1d1d;
-  --oink-code-text: #c9c9c9;
-  --oink-pre-bg: #1c1c1c;
-  --oink-navbar-bg: #262626;
-  --oink-footer-bg: #1f1f1f;
-  --oink-shadow: none;
-
-  --oink-success: #9fb3a2;
-  --oink-info: #9fa8b3;
-  --oink-warning: #c2b183;
-  --oink-danger: #c29393;
-  --oink-success-bg: #282c28;
-  --oink-info-bg: #282a2d;
-  --oink-warning-bg: #2d2b24;
-  --oink-danger-bg: #2d2626;
-}
-
-/* Color, light. */
-:root[data-display='color'] {
   --oink-bg: #efeade;
   --oink-bg-alt: #e6dfcd;
   --oink-bg-raised: #f6f2e8;
@@ -146,6 +85,68 @@
   --oink-danger-bg: #2f2424;
 }
 
+/* E-paper, light. */
+:root[data-display='epaper'] {
+  --oink-bg: #ded9ca;
+  --oink-bg-alt: #d4cdbc;
+  --oink-bg-raised: #e4e0d3;
+  --oink-text: #52504a;
+  --oink-text-strong: #33312c;
+  --oink-text-soft: #767064;
+  --oink-line: #b8ae95;
+  --oink-line-soft: #cbc2ac;
+  --oink-link: #38362f;
+  --oink-link-hover: #000000;
+  --oink-primary: #3a3833;
+  --oink-on-primary: #e6e2d6;
+  --oink-code-bg: #d2cbb9;
+  --oink-code-text: #38362f;
+  --oink-pre-bg: #d8d2c1;
+  --oink-navbar-bg: #e2ddcf;
+  --oink-footer-bg: #d6cfbf;
+  --oink-shadow: none;
+
+  --oink-success: #3f4a41;
+  --oink-info: #434850;
+  --oink-warning: #5a4f32;
+  --oink-danger: #5a3a3a;
+  --oink-success-bg: #e0ded1;
+  --oink-info-bg: #dedbd3;
+  --oink-warning-bg: #e6e0cc;
+  --oink-danger-bg: #e2d8d0;
+}
+
+/* E-paper, night. */
+:root[data-display='epaper'][data-theme='dark'] {
+  --oink-bg: #232323;
+  --oink-bg-alt: #292929;
+  --oink-bg-raised: #2e2e2e;
+  --oink-text: #a8a8a8;
+  --oink-text-strong: #dcdcdc;
+  --oink-text-soft: #7d7d7d;
+  --oink-line: #3f3f3f;
+  --oink-line-soft: #333333;
+  --oink-link: #d7d7d7;
+  --oink-link-hover: #ffffff;
+  --oink-primary: #d7d7d7;
+  --oink-on-primary: #232323;
+  --oink-code-bg: #1d1d1d;
+  --oink-code-text: #c9c9c9;
+  --oink-pre-bg: #1c1c1c;
+  --oink-navbar-bg: #262626;
+  --oink-footer-bg: #1f1f1f;
+  --oink-shadow: none;
+
+  --oink-success: #9fb3a2;
+  --oink-info: #9fa8b3;
+  --oink-warning: #c2b183;
+  --oink-danger: #c29393;
+  --oink-success-bg: #282c28;
+  --oink-info-bg: #282a2d;
+  --oink-warning-bg: #2d2b24;
+  --oink-danger-bg: #2d2626;
+}
+
 /* -------------------------------------------------------------------------
  * Infima mapping
  * ---------------------------------------------------------------------- */
@@ -175,8 +176,7 @@
 }
 
 /* Colors follow the display mode. */
-:root,
-:root[data-display='epaper'] {
+:root {
   --ifm-background-color: var(--oink-bg);
   --ifm-background-surface-color: var(--oink-bg-raised);
   --ifm-color-content: var(--oink-text);
@@ -323,7 +323,7 @@ html[data-display='epaper'] .theme-code-block {
 /* The active side follows data-display, so it is correct before hydration. */
 html[data-display='epaper'] .oink-display-toggle__button[data-mode='epaper'],
 html[data-display='color'] .oink-display-toggle__button[data-mode='color'],
-html:not([data-display]) .oink-display-toggle__button[data-mode='epaper'] {
+html:not([data-display]) .oink-display-toggle__button[data-mode='color'] {
   background: var(--oink-bg-raised);
   box-shadow: inset 0 0 0 1px var(--oink-line);
   color: var(--oink-text-strong);
