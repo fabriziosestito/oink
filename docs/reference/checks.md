@@ -119,6 +119,20 @@ A perk or condition with `advantage: true` selects the advantage pool. One
 with `disadvantage: true` selects the disadvantage pool. Both together cancel.
 A story pool argument beats the state flags.
 
+## Which profile runs
+
+The engine picks the profile in this order. When the story names a pool, it
+uses that pool and ignores advantage and disadvantage; an unknown name is an
+error. Otherwise it starts from the rulebook default profile. With advantage
+only it uses the `advantage` pool named by that profile, with disadvantage
+only the `disadvantage` pool. With both or neither it keeps the base profile.
+When the base profile names no pool for the winning side, it also keeps the
+base profile. Passive checks and spell checks always use the default profile.
+
+The result reports the profile that ran, which can differ from the requested
+one when advantage or disadvantage applies. `CheckResult.pool` and
+`CheckRecord.pool` carry that id.
+
 ## Check records
 
 The engine exposes each active check, passive check, and spell check through
