@@ -1,43 +1,43 @@
-// Prova d20: usa il profilo "heroic" (1d20, roll-over, 20 naturale critico).
-// Per provarla: cp assets/story/demo_d20.ink assets/story/main.ink && make sim
+// d20 demo: uses the "heroic" profile (1d20, roll-over, natural 20 crits).
+// To try it: cp assets/story/demo_d20.ink assets/story/main.ink && make sim
 //
-// Nota: i rami "- condizione:" multipli non funzionano con bladeink,
-// quindi i quattro esiti sono scritti come condizionali annidati.
+// Note: multi-branch "- condition:" blocks do not work with bladeink,
+// so the four outcomes are written as nested conditionals.
 
 EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
 EXTERNAL check_margin()
 
 VAR outcome = ""
 
-Un drago dorme sopra un mucchio d'oro. Una scaglia luccica in disparte.
-*   [Sguscia verso l'oro]
+A dragon sleeps on a mound of gold. One scale glints off to the side.
+*   [Sneak toward the gold]
     ~ outcome = roll_check("lockpicking", 12, "thief", 0, "heroic")
     { outcome == "critical_success":
-        Nemmeno un tintinnio. L'oro è tuo. -> oro
+        Not even a clink. The gold is yours. -> gold
     - else:
         { outcome == "success":
-            Un passo felpato dopo l'altro. L'oro è tuo. -> oro
+            One soft step after another. The gold is yours. -> gold
         - else:
             { outcome == "critical_failure":
-                Pesti una coppa. Il drago apre un occhio. -> fuga
+                You kick a goblet. The dragon opens one eye. -> flight
             - else:
-                Un'eco metallica. Il drago si agita. -> fuga
+                A metallic echo. The dragon stirs. -> flight
             }
         }
     }
-*   [Sfida il drago a duello]
+*   [Challenge the dragon to a duel]
     ~ outcome = roll_check("endurance", 12, "", 0, "heroic")
-    Margine: {check_margin()}.
+    Margin: {check_margin()}.
     { outcome == "success" or outcome == "critical_success":
-        Il drago accetta e perde. Leggendario. -> oro
+        The dragon accepts and loses. Legendary. -> gold
     - else:
-        Il drago sbuffa divertito. Meglio correre. -> fuga
+        The dragon snorts, amused. Better run. -> flight
     }
 
-=== oro ===
-Ricco e vivo. Le taverne canteranno di te.
+=== gold ===
+Rich and alive. The taverns will sing of you.
 -> END
 
-=== fuga ===
-Vivo e povero. Le gambe tremano ancora.
+=== flight ===
+Alive and poor. Your legs are still shaking.
 -> END

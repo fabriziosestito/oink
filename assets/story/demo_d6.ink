@@ -1,46 +1,46 @@
-// Prova d6: usa il profilo default "standard" (2d6, roll-over).
-// Per provarla: cp assets/story/demo_d6.ink assets/story/main.ink && make sim
+// d6 demo: uses the default "standard" profile (2d6, roll-over).
+// To try it: cp assets/story/demo_d6.ink assets/story/main.ink && make sim
 //
-// Nota: i rami "- condizione:" multipli non funzionano con bladeink,
-// quindi i quattro esiti sono scritti come condizionali annidati.
+// Note: multi-branch "- condition:" blocks do not work with bladeink,
+// so the four outcomes are written as nested conditionals.
 
 EXTERNAL roll_check(ability, difficulty, tags, modifier)
 EXTERNAL passive_check(ability, dc, tags, modifier)
 
 VAR outcome = ""
 
-Una porta di legno blocca la cantina. Senti passi sopra di te.
+A wooden door blocks the cellar. You hear footsteps above you.
 { passive_check("empathy", 8, "", 0):
-    Qualcuno trattiene il fiato dall'altra parte.
+    Someone is holding their breath on the other side.
 }
 
-*   [Sfondala di spalla]
+*   [Barge it with your shoulder]
     ~ outcome = roll_check("endurance", 8, "", 0)
     { outcome == "critical_success":
-        La porta vola via dai cardini. -> cantina
+        The door flies off its hinges. -> cellar
     - else:
         { outcome == "success":
-            La porta cede scricchiolando. -> cantina
+            The door gives way with a creak. -> cellar
         - else:
             { outcome == "critical_failure":
-                Rimbalzi indietro e cadi a terra. -> corridoio
+                You bounce back and hit the floor. -> corridor
             - else:
-                La spalla duole, la porta resta chiusa. -> corridoio
+                Your shoulder aches, the door stays shut. -> corridor
             }
         }
     }
-*   [Forza la serratura]
+*   [Pick the lock]
     ~ outcome = roll_check("lockpicking", 6, "thief", 0)
     { outcome == "success" or outcome == "critical_success":
-        Il chiavistello scatta. -> cantina
+        The bolt clicks open. -> cellar
     - else:
-        Il grimaldello si piega. -> corridoio
+        The pick bends out of shape. -> corridor
     }
 
-=== cantina ===
-Hai trovato le provviste. Missione compiuta.
+=== cellar ===
+You found the supplies. Mission accomplished.
 -> END
 
-=== corridoio ===
-Torni sui tuoi passi. Ci riproverai domani.
+=== corridor ===
+You turn back. You will try again tomorrow.
 -> END
