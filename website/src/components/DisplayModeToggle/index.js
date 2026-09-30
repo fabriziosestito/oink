@@ -2,18 +2,18 @@ import React, {useCallback, useEffect, useState} from 'react';
 import clsx from 'clsx';
 
 const STORAGE_KEY = 'oink-display-mode';
-const DEFAULT_MODE = 'epaper';
+const DEFAULT_MODE = 'color';
 
 const MODES = [
-  {
-    id: 'epaper',
-    label: 'E-paper',
-    description: 'E-paper display mode: grayscale, high contrast, dithered art',
-  },
   {
     id: 'color',
     label: 'Color',
     description: 'Color display mode: warm paper with muted red and ochre accents',
+  },
+  {
+    id: 'epaper',
+    label: 'E-paper',
+    description: 'E-paper display mode: grayscale, high contrast, dithered art',
   },
 ];
 
@@ -21,9 +21,8 @@ function readDisplayMode() {
   if (typeof document === 'undefined') {
     return DEFAULT_MODE;
   }
-  return document.documentElement.getAttribute('data-display') === 'color'
-    ? 'color'
-    : DEFAULT_MODE;
+  const value = document.documentElement.getAttribute('data-display');
+  return value === 'color' || value === 'epaper' ? value : DEFAULT_MODE;
 }
 
 function EpaperIcon() {

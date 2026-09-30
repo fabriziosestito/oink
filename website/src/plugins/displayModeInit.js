@@ -2,15 +2,15 @@
  * Injects the display mode init script.
  *
  * The script runs before the page paints. It reads the saved display mode
- * (e-paper or color) and sets `data-display` on the <html> element, so the
- * correct theme shows up without a color flash. E-paper is the default.
+ * (color or e-paper) and sets `data-display` on the <html> element, so the
+ * correct theme shows up without a color flash. Color is the default.
  *
  * Without JavaScript the attribute stays unset and the CSS defaults to
- * e-paper.
+ * color.
  */
 
 const STORAGE_KEY = 'oink-display-mode';
-const DEFAULT_MODE = 'epaper';
+const DEFAULT_MODE = 'color';
 
 export default function displayModeInitPlugin() {
   return {
