@@ -3,7 +3,7 @@
 # oink 🐽
 
 [![CI](https://github.com/fabriziosestito/oink/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosestito/oink/actions/workflows/ci.yml)
-[![Docs](https://github.com/fabriziosestito/oink/actions/workflows/docs.yml/badge.svg)](https://github.com/fabriziosestito/oink/actions/workflows/docs.yml)
+[![Docs](https://img.shields.io/badge/docs-oink-96292b)](https://fabriziosestito.github.io/oink/)
 
 oink is a *librogame*
 ([gamebook](https://en.wikipedia.org/wiki/Gamebook)) engine for e-ink devices.
@@ -12,6 +12,9 @@ that stay readable in sunlight. Think choose-your-own-adventure, with dice.
 Desktop builds run today, and phones and more e-ink hardware are on the roadmap.
 
 oink is in early development.
+
+Read the [documentation](https://fabriziosestito.github.io/oink/) for the
+rulebook, the YAML format, checks, and the engine API.
 
 ## 🐽 Features
 
@@ -53,9 +56,8 @@ simulator controls.
 
 ## 📖 Documentation
 
-The documentation covers the rulebook, the YAML format, checks, and the engine
-API. Read it at <https://fabriziosestito.github.io/oink/>, or run `make docs`
-to serve the site on your machine with hot reload.
+The pages live in [`docs/`](docs/). Run `make docs` to serve them on your
+machine with hot reload.
 
 ## 📜 License
 
