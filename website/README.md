@@ -2,8 +2,8 @@
 
 The Docusaurus site that renders the documentation in `../docs/`.
 
-The content lives in `docs/`. This folder holds the theme, the landing page,
-and the build and deployment configuration.
+The content lives in `docs/` and is served at the site root. This folder holds
+the theme and the build and deployment configuration.
 
 ## Commands
 

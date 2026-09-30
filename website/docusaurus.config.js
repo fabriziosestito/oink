@@ -75,7 +75,7 @@ const config = {
       ({
         docs: {
           path: '../docs',
-          routeBasePath: 'docs',
+          routeBasePath: '/',
           sidebarPath: './sidebars.js',
           editUrl: 'https://github.com/fabriziosestito/oink/edit/main/docs/',
         },
@@ -96,7 +96,7 @@ const config = {
         hashed: true,
         language: ['en'],
         docsDir: '../docs',
-        docsRouteBasePath: '/docs',
+        docsRouteBasePath: '/',
         indexBlog: false,
         highlightSearchTermsOnTargetPage: true,
       },
@@ -119,19 +119,13 @@ const config = {
           src: 'img/oink-logo.png',
         },
         items: [
-          {
-            type: 'docSidebar',
-            sidebarId: 'docsSidebar',
-            position: 'left',
-            label: 'Docs',
-          },
-          {type: 'custom-displayMode', position: 'right'},
           {type: 'search', position: 'right'},
           {
             href: 'https://github.com/fabriziosestito/oink',
             label: 'GitHub',
             position: 'right',
           },
+          {type: 'custom-displayMode', position: 'right'},
         ],
       },
       footer: {
@@ -145,17 +139,17 @@ const config = {
           {
             title: 'Documentation',
             items: [
-              {label: 'Introduction', to: '/docs'},
-              {label: 'Rulebook', to: '/docs/rulebook'},
-              {label: 'Architecture', to: '/docs/architecture'},
+              {label: 'Introduction', to: '/'},
+              {label: 'Rulebook', to: '/rulebook'},
+              {label: 'Architecture', to: '/architecture'},
             ],
           },
           {
             title: 'Reference',
             items: [
-              {label: 'YAML', to: '/docs/reference/yaml'},
-              {label: 'Checks and modifiers', to: '/docs/reference/checks'},
-              {label: 'Ink API', to: '/docs/reference/ink-api'},
+              {label: 'YAML', to: '/reference/yaml'},
+              {label: 'Checks and modifiers', to: '/reference/checks'},
+              {label: 'Ink API', to: '/reference/ink-api'},
             ],
           },
           {

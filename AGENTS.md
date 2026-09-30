@@ -66,7 +66,7 @@ oink/
 ├── docs/index.md       # documentation navigation
 ├── docs/reference/     # YAML, checks, state, Ink API, and Rust API
 ├── docs/architecture.md # current crate boundaries and runtime ownership
-├── website/             # Docusaurus site: theme, landing page, build config
+├── website/             # Docusaurus site: theme and build config
 ├── oink-core/           # engine core: Ink runtime wrapper + YAML data model
 │   └── src/
 │       ├── lib.rs
