@@ -27,7 +27,7 @@ clean:
 	cargo clean
 
 # Documentation site (Docusaurus in website/). Pages come from docs/.
-# Requires Node; the version is pinned in website/.tool-versions.
+# Requires Node 20 or newer.
 website/node_modules:
 	cd website && npm install
 

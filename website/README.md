@@ -14,8 +14,7 @@ Run these from the repository root:
 - `make docs-build` builds the static site into `website/build`.
 - `make docs-serve` serves a build.
 
-Node 20 or newer is required. `website/.tool-versions` pins the version for
-asdf users.
+Node 20 or newer is required.
 
 See [docs/publishing.md](../docs/publishing.md) for how to write pages, how
 the display modes work, and how deployment works.
