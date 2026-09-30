@@ -6,8 +6,8 @@ sidebar_position: 5
 # Writing docs
 
 The pages live in `docs/` at the repository root. The Docusaurus site in
-`website/` renders them. Only the theme, the landing page, and the build
-configuration live in `website/`; all content stays in `docs/`.
+`website/` renders them and serves them at the site root. Only the theme and
+the build configuration live in `website/`; all content stays in `docs/`.
 
 ## Run the site locally
 
@@ -50,11 +50,11 @@ Other commands:
 
 ## Display modes
 
-The site has two display modes. The switch is in the navbar, and the browser
-remembers the choice:
+The site has two display modes. The switch is in the navbar next to the light
+and dark switch, and the browser remembers the choice:
 
-- **E-paper (default):** grayscale, paper texture, dithered art.
-- **Color:** the same layout with muted red and ochre accents.
+- **Color (default):** the same layout with muted red and ochre accents.
+- **E-paper:** grayscale, paper texture, dithered art.
 
 The light and dark switch works in both modes. The default is set in
 `website/src/plugins/displayModeInit.js`.
