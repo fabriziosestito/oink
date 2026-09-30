@@ -569,6 +569,42 @@ dice:
     }
 
     #[test]
+    fn loader_rejects_reversed_outcome_bounds() {
+        for (low, high) in [
+            ("score_at_least: 10", "score_at_most: 5"),
+            ("margin_at_least: 0", "margin_at_most: -1"),
+            ("degrees_at_least: 3", "degrees_at_most: 2"),
+            ("target_at_least: 60", "target_at_most: 50"),
+            ("degrees_min: 2", "degrees_max: 1"),
+        ] {
+            let yaml = format!(
+                "dice:\n  default: standard\n  profiles:\n    standard:\n      notation: \"2d6\"\n      outcomes:\n        - {{ {low}, {high}, outcome: failure }}\n"
+            );
+            let error = Rulebook::load(&yaml).unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains("standard") && message.contains("outcome row 0"),
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn loader_accepts_equal_outcome_bounds() {
+        let yaml = r#"
+dice:
+  default: standard
+  profiles:
+    standard:
+      notation: "2d6"
+      outcomes:
+        - { score_at_least: 7, score_at_most: 7, outcome: success }
+        - { outcome: failure }
+"#;
+        Rulebook::load(yaml).expect("equal bounds load");
+    }
+
+    #[test]
     fn direct_bonus_passes_value_through() {
         let yaml = r#"
 characteristics:
@@ -596,5 +632,60 @@ characteristics:
 
         let error = spell::cast(&rulebook, &mut character, "telekinesis", &mut dice).unwrap_err();
         assert!(matches!(error, spell::SpellError::NotEnough { .. }));
+    }
+
+    #[cfg(feature = "spells")]
+    #[test]
+    fn spells_ignore_advantage_from_state() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+abilities:
+  a:
+    name: A
+    characteristic: c
+perks:
+  lucky:
+    name: Lucky
+    advantage: true
+resources:
+  mana: { name: Mana, min: 0, max: 5 }
+spells:
+  bolt:
+    name: Bolt
+    ability: a
+    cost: { resource: mana, amount: 1 }
+    check: { difficulty: 10 }
+dice:
+  default: standard
+  profiles:
+    standard:
+      notation: "1d20"
+      direction: over
+      advantage: advantage_pool
+      outcomes:
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+    advantage_pool:
+      notation: "2d20kh1"
+      direction: over
+      outcomes:
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+starting_character:
+  characteristics: { c: 1 }
+  perks: [lucky]
+  resources: { mana: 5 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::from_starting(&rulebook);
+        assert!(character.has_perk("lucky"));
+        let mut dice = ScriptedDice::new(&[10, 4]);
+        let result = spell::cast(&rulebook, &mut character, "bolt", &mut dice).unwrap();
+        assert_eq!(result.check.pool, "standard");
     }
 }

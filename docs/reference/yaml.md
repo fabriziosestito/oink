@@ -277,8 +277,9 @@ dice:
         - { margin_at_least: 0, outcome: success }
         - { outcome: failure }
 ```
-
-Supported dice are d2, d4, d6, d8, d10, d12, d20, and d%. Use keep notation
+A pool can contain 1 to 10 dice. Supported dice are d2, d4, d6, d8, d10, 
+d12,
+d20, and d%. Use keep notation
 for advantage pools, such as `2d20kh1` and `2d20kl1`. `d100` and `1d100`
 are aliases for `d%`. A plain `2d10` stays a sum. When the section is absent,
 the loader inserts the 2d6 standard profile above.
@@ -302,7 +303,8 @@ Conditions and environments start empty.
 
 ## Loading errors and warnings
 
-The loader rejects malformed YAML, reversed bounds, invalid characteristic
+The loader rejects malformed YAML, reversed bounds on characteristics,
+resources, and outcome row pairs, invalid characteristic
 defaults, unknown ability parents, unknown grant targets, unknown starting IDs,
 bad dice notation, unknown die sizes, unknown dice defaults, and unknown
 advantage pools. It also rejects unknown conditions applied by items and

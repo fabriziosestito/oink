@@ -139,8 +139,8 @@ pub struct PassiveResult {
 }
 ```
 
-Build a request with `CheckRequest::new(ability, difficulty)`, then use
-`with_tags(tags)`, `with_modifier(value)`, and `with_pool(name)` when needed.
+Build a request with `CheckRequest::new(ability, difficulty)`, then use 
+`with_tags(tags)`, `with_modifier(value)`, and `with_pool(Some(name))` when needed.
 A missing pool means the rulebook default. `CheckResult.pool` names the profile
 that ran, which can differ from the request when advantage or disadvantage
 applies. See [checks](checks.md#which-profile-runs) for the order.

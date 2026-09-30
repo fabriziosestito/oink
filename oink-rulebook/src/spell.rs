@@ -103,12 +103,14 @@ pub fn cast<D: Dice + ?Sized>(
     }
 
     let tags: Vec<&str> = spell.check.tags.iter().map(String::as_str).collect();
+    // Spells always use the default profile. Naming it explicitly skips the
+    // advantage and disadvantage pools that character state would select.
     let request = CheckRequest {
         ability: spell.ability.as_str(),
         difficulty,
         tags: &tags,
         modifier: 0,
-        pool: None,
+        pool: Some(rulebook.dice.default.as_str()),
     };
     let checks = Checks::new(rulebook, character);
     // Validate the check before spending or advancing the dice source.
