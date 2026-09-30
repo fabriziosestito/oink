@@ -107,7 +107,7 @@ impl CheckRecord {
                     }
                 };
                 format!(
-                    "* {} check: {}; {}; score {}, target {}, margin {:+}, {}, {} degrees vs {}",
+                    "* {} check: {}; {}; score {}, target {}, margin {:+}, {}, {} degrees",
                     self.ability,
                     dice_desc,
                     modifiers,
@@ -115,8 +115,7 @@ impl CheckRecord {
                     self.target,
                     self.margin,
                     self.outcome,
-                    self.degrees,
-                    self.difficulty
+                    self.degrees
                 )
             }
             None => format!(
@@ -414,7 +413,7 @@ Focus is {resource("focus")}.
             "{description}"
         );
         assert!(description.contains("score"), "{description}");
-        assert!(description.contains("vs 10"), "{description}");
+        assert!(description.contains("target 10"), "{description}");
     }
 
     #[test]

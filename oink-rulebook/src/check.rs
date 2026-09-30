@@ -71,8 +71,8 @@ pub struct PassiveResult {
 }
 
 /// What the story asks for. Tags may be empty, the modifier is the one-off
-/// modifier, and pool names a dice profile. None means the rulebook default.
-#[derive(Debug, Clone, Copy)]
+/// modifier, and pool optionally names an explicit dice profile. None starts
+/// from the rulebook default and permits state advantage or disadvantage.#[derive(Debug, Clone, Copy)]
 pub struct CheckRequest<'a> {
     pub ability: &'a str,
     pub difficulty: i32,

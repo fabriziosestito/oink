@@ -125,6 +125,49 @@ impl Rulebook {
                     ));
                 }
             }
+            for (index, rule) in profile.outcomes.iter().enumerate() {
+                let row = format!("dice profile `{id}` outcome row {index}");
+                check_bound_pair(
+                    errors,
+                    &row,
+                    "score_at_least",
+                    "score_at_most",
+                    rule.score_at_least,
+                    rule.score_at_most,
+                );
+                check_bound_pair(
+                    errors,
+                    &row,
+                    "margin_at_least",
+                    "margin_at_most",
+                    rule.margin_at_least,
+                    rule.margin_at_most,
+                );
+                check_bound_pair(
+                    errors,
+                    &row,
+                    "degrees_at_least",
+                    "degrees_at_most",
+                    rule.degrees_at_least,
+                    rule.degrees_at_most,
+                );
+                check_bound_pair(
+                    errors,
+                    &row,
+                    "target_at_least",
+                    "target_at_most",
+                    rule.target_at_least,
+                    rule.target_at_most,
+                );
+                check_bound_pair(
+                    errors,
+                    &row,
+                    "degrees_min",
+                    "degrees_max",
+                    rule.degrees_min,
+                    rule.degrees_max,
+                );
+            }
         }
 
         for (id, ability) in &self.abilities {
@@ -268,6 +311,23 @@ impl Rulebook {
         if !self.tags.contains_key(tag) {
             warnings.push(format!(
                 "{context} uses tag `{tag}`, which is not in the tags registry"
+            ));
+        }
+    }
+}
+
+fn check_bound_pair(
+    errors: &mut Vec<String>,
+    context: &str,
+    low_name: &str,
+    high_name: &str,
+    low: Option<i32>,
+    high: Option<i32>,
+) {
+    if let (Some(low), Some(high)) = (low, high) {
+        if low > high {
+            errors.push(format!(
+                "{context}: {low_name} {low} is greater than {high_name} {high}"
             ));
         }
     }
