@@ -20,10 +20,12 @@ pub use dice::{parse_notation, Dice, DicePoolError, SeededDice, SystemDice};
 pub use loader::{LoadError, Loaded};
 pub use model::Outcome;
 pub use model::{
-    Ability, BonusTable, BonusThreshold, Characteristic, CharacteristicBonus, Condition, Cost,
-    Degrees, DiceConfig, DicePool, DiceProfile, Die, DifficultyRef, DirectMarker, Direction,
-    Environment, Item, Keep, MaxFromEntry, MaxFromMode, MaxFromThreshold, Modifiers, OutcomeRule,
-    Perk, Resource, Rulebook, Spell, SpellCheck, StartingCharacter, Tag, TagGrants,
+    Ability, BonusTable, BonusThreshold, CharacterCreation, Characteristic, CharacteristicBonus,
+    Condition, Cost, CreationBase, CreationCosts, CreationMode, CreationPools, CreationPreset,
+    CreationValidation, Degrees, DiceConfig, DicePool, DiceProfile, Die, DifficultyRef,
+    DirectMarker, Direction, Environment, Item, Keep, MaxFromEntry, MaxFromMode, MaxFromThreshold,
+    Modifiers, OutcomeRule, Perk, Resource, Rulebook, Spell, SpellCheck, StartingCharacter, Tag,
+    TagGrants,
 };
 pub use modifiers::{Breakdown, BreakdownEntry};
 pub use names::{Names, Section};
@@ -555,6 +557,112 @@ resources:
                 .contains("unknown characteristic `missing`"),
             "{error}"
         );
+    }
+
+    const CREATION_FIXTURE: &str = r#"
+characteristics:
+  intellect:
+    name: Intellect
+    min: 1
+    max: 14
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+  physique:
+    name: Physique
+    min: 1
+    max: 14
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+abilities:
+  logic:
+    name: Logic
+    characteristic: intellect
+  endurance:
+    name: Endurance
+    characteristic: physique
+perks:
+  juggernaut:
+    name: Juggernaut
+tags:
+  strong:
+    name: Strong
+character_creation:
+  mode: pool
+  base:
+    characteristics: { intellect: 2, physique: 2 }
+    abilities: { logic: 0, endurance: 0 }
+  pools:
+    characteristic_points: 10
+    ability_points: 5
+    perk_points: 1
+  costs:
+    characteristics: 1
+    abilities: 1
+  validate: all_points_spent
+  presets:
+    bruiser:
+      name: Bruiser
+      characteristics: { intellect: 2, physique: 8 }
+      abilities: { endurance: 3 }
+      perks: [juggernaut]
+      tags: [strong]
+"#;
+
+    #[test]
+    fn creation_config_loads_with_pools_costs_and_presets() {
+        let rulebook = Rulebook::load(CREATION_FIXTURE)
+            .expect("fixture loads")
+            .rulebook;
+        let creation = rulebook.creation.expect("creation is set");
+        assert_eq!(creation.mode, CreationMode::Pool);
+        assert_eq!(creation.pools.characteristic_points, 10);
+        assert_eq!(creation.pools.ability_points, 5);
+        assert_eq!(creation.pools.perk_points, 1);
+        assert_eq!(creation.costs.characteristics, 1);
+        assert_eq!(creation.validate, CreationValidation::AllPointsSpent);
+        let bruiser = &creation.presets["bruiser"];
+        assert_eq!(bruiser.characteristics["physique"], 8);
+        assert_eq!(bruiser.abilities["endurance"], 3);
+        assert_eq!(bruiser.perks, vec!["juggernaut".to_string()]);
+    }
+
+    #[test]
+    fn missing_creation_section_means_no_creation() {
+        let rulebook = fixture();
+        assert!(rulebook.creation.is_none());
+    }
+
+    #[test]
+    fn creation_costs_default_to_one_flat_point() {
+        let yaml = "character_creation:\n  pools:\n    characteristic_points: 3\n";
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let creation = rulebook.creation.expect("creation is set");
+        assert_eq!(creation.costs.characteristics, 1);
+        assert_eq!(creation.costs.abilities, 1);
+    }
+
+    #[test]
+    fn loader_rejects_unknown_creation_references() {
+        for (section, message) in [
+            (
+                "base:\n    characteristics: { missing: 2 }",
+                "character creation base has unknown characteristic `missing`",
+            ),
+            (
+                "presets:\n    p:\n      name: P\n      abilities: { missing: 1 }",
+                "character creation preset `p` has unknown ability `missing`",
+            ),
+            (
+                "presets:\n    p:\n      name: P\n      perks: [missing]",
+                "character creation preset `p` has unknown perk `missing`",
+            ),
+        ] {
+            let yaml = format!("character_creation:\n  {section}\n");
+            let error = Rulebook::load(&yaml).unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
     }
 
     #[test]

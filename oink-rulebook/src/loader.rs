@@ -315,6 +315,53 @@ impl Rulebook {
             }
         }
 
+        if let Some(creation) = &self.creation {
+            for id in creation.base.characteristics.keys() {
+                if !self.characteristics.contains_key(id) {
+                    errors.push(format!(
+                        "character creation base has unknown characteristic `{id}`"
+                    ));
+                }
+            }
+            for id in creation.base.abilities.keys() {
+                if !self.abilities.contains_key(id) {
+                    errors.push(format!(
+                        "character creation base has unknown ability `{id}`"
+                    ));
+                }
+            }
+            for (preset, definition) in &creation.presets {
+                for id in definition.characteristics.keys() {
+                    if !self.characteristics.contains_key(id) {
+                        errors.push(format!(
+                            "character creation preset `{preset}` has unknown characteristic `{id}`"
+                        ));
+                    }
+                }
+                for id in definition.abilities.keys() {
+                    if !self.abilities.contains_key(id) {
+                        errors.push(format!(
+                            "character creation preset `{preset}` has unknown ability `{id}`"
+                        ));
+                    }
+                }
+                for id in &definition.perks {
+                    if !self.perks.contains_key(id) {
+                        errors.push(format!(
+                            "character creation preset `{preset}` has unknown perk `{id}`"
+                        ));
+                    }
+                }
+                for tag in &definition.tags {
+                    self.warn_tag(
+                        &mut warnings,
+                        tag,
+                        &format!("character creation preset `{preset}`"),
+                    );
+                }
+            }
+        }
+
         warnings
     }
 

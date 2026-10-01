@@ -254,6 +254,39 @@ spells:
     check: { difficulty: medium, tags: [physical] }
 ```
 
+## Character creation
+
+The optional `character_creation` section describes point-buy creation. When
+absent, stories use `starting_character` directly. Creation runs only when the
+story calls its functions, so a story can also apply a preset silently and
+skip spending entirely.
+
+```yaml
+character_creation:
+  mode: pool
+  base:
+    characteristics: { intellect: 2, physique: 2 }
+    abilities: { logic: 0 }
+  pools:
+    characteristic_points: 10
+    ability_points: 5
+    perk_points: 1
+  costs:
+    characteristics: 1
+    abilities: 1
+  validate: all_points_spent
+  presets:
+    bruiser:
+      name: Bruiser
+      characteristics: { physique: 8 }
+      abilities: { endurance: 3 }
+      perks: [juggernaut]
+      tags: [strong]
+```
+
+Costs are flat points per pick and default to 1. The loader rejects preset and
+base entries that reference unknown characteristics, abilities, or perks.
+
 Definitions load in all builds. Casting requires the `spells` feature.
 See the [Ink API](ink-api.md#spells) for cost and failure behavior.
 
