@@ -138,6 +138,27 @@ Omit `duration` to keep a condition until the story removes it.
 Adding an existing condition resets its duration without stacking its modifiers.
 A duration of 0 expires at the next `end_scene()` call.
 
+## Prerequisites
+
+The optional `prerequisites` map gates perks, abilities, items, and spells by
+id behind minimum values. Characteristics read stored values, abilities read
+owned levels with absent meaning 0, resources read current balances.
+
+```yaml
+prerequisites:
+  juggernaut:
+    requires:
+      characteristics: { physique: 6 }
+  telekinesis:
+    requires:
+      abilities: { arcana: 2 }
+      resources: { focus: 2 }
+```
+
+Ink `add_perk` and `add_item` refuse gated ids with an error. Creation
+`spend_point` returns false and presets skip gated perks. Spell casting does
+not enforce prerequisites yet.
+
 ## Environments
 
 Environments accept `name`, `description`, `tags`, and `modifiers`.
@@ -287,6 +308,33 @@ character_creation:
 Costs are flat points per pick and default to 1. The loader rejects preset and
 base entries that reference unknown characteristics, abilities, or perks.
 
+## Levelling
+
+The optional `levelling` section sets the XP curve, the level cap, and the
+rewards. Sheets start at level 1 with 0 XP. Experience comes only from the
+story through `add_xp`; checks never grant XP.
+
+```yaml
+levelling:
+  max_level: 10
+  xp_curve:
+    - { level: 2, xp: 100 }
+    - { level: 3, xp: 250 }
+  rewards:
+    per_level:
+      characteristic_points: 1
+      ability_points: 2
+    interval:
+      every: 3
+      perk_points: 1
+```
+
+Each entry names the XP needed to reach that level. `level_up()` rises one
+level when banked XP reaches the next curve entry, granting the per-level
+points plus the interval perk points when the new level hits the interval.
+Curve levels must sit within 2 and the cap with no duplicates, and the
+interval must be positive when present.
+
 Definitions load in all builds. Casting requires the `spells` feature.
 See the [Ink API](ink-api.md#spells) for cost and failure behavior.
 
@@ -358,7 +406,10 @@ resources, and outcome row pairs, invalid characteristic
 defaults, unknown ability parents, unknown grant targets, unknown starting IDs,
 bad dice notation, unknown die sizes, unknown dice defaults, and unknown
 advantage pools. It also rejects unknown conditions applied by items and
-invalid spell references or negative spell costs.
+invalid spell references or negative spell costs. Prerequisite entries must
+gate a known perk, ability, item, or spell and reference known characteristics,
+abilities, and resources. Levelling curve levels must sit within 2 and the cap
+with no duplicates, and a present interval must be positive.
 
 Unknown tags used by abilities, grants, environments, spell checks, or tag
 modifiers produce warnings. Descriptive item tags need no registry entry.

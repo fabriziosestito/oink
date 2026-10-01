@@ -62,6 +62,7 @@ Target: {difficulty("medium")}.
 | `use_item(id)` | void | Applies an owned consumable's conditions and removes it |
 
 All arguments are strings. `add_item()` and `use_item()` reject unknown definitions.
+`add_item()` also rejects gated items whose prerequisites fail.
 Using a known but absent item does nothing. Using a non-consumable does nothing.
 There are no item quantities or equipment slots.
 
@@ -91,6 +92,7 @@ EXTERNAL remove_item(id)
 | `has_tag(tag)` | boolean | Tests character, perk, condition, and carried-item tags |
 
 Arguments are strings. Adding an unknown perk or condition produces an error.
+Adding a perk or item whose prerequisites fail produces an error too.
 Queries return false for absent IDs. Removal of absent IDs does nothing.
 Removing a source does not remove abilities or perks it previously granted.
 There are no `add_tag()` or `remove_tag()` Ink bindings today.
@@ -127,7 +129,7 @@ The corridor is dark.
 | --- | --- | --- |
 | `ability_level(id)` | integer | Returns the owned level, or 0 if absent or unknown |
 | `characteristic(id)` | integer | Returns the stored characteristic value |
-| `characteristic_bonus(id)` | integer | Returns its threshold bonus |
+| `characteristic_bonus(id)` | integer | Returns its threshold bonus, or the raw value with `bonus: direct` |
 | `resource(id)` | integer | Returns the current resource balance |
 | `resource_max(id)` | integer | Returns the effective maximum, derived when `max_from` is set |
 | `spend_resource(id, amount)` | boolean | Pays the full amount or returns false without a change |
@@ -136,6 +138,41 @@ The corridor is dark.
 IDs are strings and amounts are nonnegative integers. Unknown characteristics
 or resources produce errors. Value queries do not include temporary check modifiers.
 A zero payment succeeds without emitting a change record. Negative amounts produce errors.
+
+## Character creation
+
+These functions run only with a `character_creation` section; without one,
+`points_available` returns 0 and the rest fail closed. Creation runs only when
+the story calls these functions, so a story can also apply a preset silently.
+
+| Function | Return value | Behavior |
+| --- | --- | --- |
+| `points_available(kind)` | integer | Returns unspent points; kind is `characteristic`, `ability`, or `perk` |
+| `spend_point(kind, id)` | boolean | Spends the flat cost and applies one pick, or returns false without a change |
+| `apply_preset(id)` | boolean | Applies a preset as the complete sheet and marks every pool spent |
+| `set_characteristic(id, value)` | boolean | Sets a characteristic clamped to its bounds, spending nothing |
+| `set_ability(id, value)` | boolean | Sets an ability level floored at zero, spending nothing |
+| `reset_character()` | void | Rebuilds the sheet from the creation base |
+
+Unknown point kinds produce errors. Unknown targets produce false. A preset
+marks every pool spent, so preset and manual spending cannot stack. Stories
+gate progress on `points_available`, e.g. `{ points_available("characteristic") > 0: ... }`.
+
+## Levelling
+
+XP comes only from the story; `add_xp` banks it without levelling, so the
+story controls when the sheet changes. Sheets start at level 1.
+
+| Function | Return value | Behavior |
+| --- | --- | --- |
+| `xp()` | integer | Returns banked experience |
+| `add_xp(amount)` | void | Banks nonnegative experience |
+| `level()` | integer | Returns the current level |
+| `level_up_ready()` | boolean | True when banked XP reaches the next curve level below the cap |
+| `level_up()` | boolean | Rises one level with rewards, or returns false when not ready |
+
+Negative amounts produce errors. Without a `levelling` section, `add_xp` still
+banks, but readiness and level-ups stay false.
 
 ## Spells
 
