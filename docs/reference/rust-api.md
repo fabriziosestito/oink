@@ -197,7 +197,7 @@ in-memory character and return notices.
 | `has_tag(&rulebook, tag)` / `effective_tags(&rulebook)` | Read the combined character tags |
 | `characteristic(id)` / `resource(id)` | Return `Option<i32>` |
 | `ability_level(id)` | Returns the level, or 0 if absent |
-| `resource_max(&rulebook, id)` | Returns the configured maximum |
+| `resource_max(&rulebook, id)` | Returns the effective maximum, derived when `max_from` is set |
 | `perk_ids`, `item_ids`, `condition_ids`, `environment_ids`, `ability_ids`, `tag_ids` | Iterate stored IDs |
 | `add_item`, `add_perk`, `add_condition`, `enter_environment`, `add_tag` | Take `&rulebook` and an ID; return `Vec<StateChange>` |
 | `remove_item`, `remove_perk`, `remove_condition`, `clear_environment`, `remove_tag` | Take an ID; return `Vec<StateChange>` |

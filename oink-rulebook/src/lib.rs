@@ -22,8 +22,8 @@ pub use model::Outcome;
 pub use model::{
     Ability, BonusTable, BonusThreshold, Characteristic, CharacteristicBonus, Condition, Cost,
     Degrees, DiceConfig, DicePool, DiceProfile, Die, DifficultyRef, DirectMarker, Direction,
-    Environment, Item, Keep, Modifiers, OutcomeRule, Perk, Resource, Rulebook, Spell, SpellCheck,
-    StartingCharacter, Tag, TagGrants,
+    Environment, Item, Keep, MaxFromEntry, MaxFromMode, MaxFromThreshold, Modifiers, OutcomeRule,
+    Perk, Resource, Rulebook, Spell, SpellCheck, StartingCharacter, Tag, TagGrants,
 };
 pub use modifiers::{Breakdown, BreakdownEntry};
 pub use names::{Names, Section};
@@ -443,6 +443,118 @@ characteristics:
         character.restore_resource(&rulebook, "focus", i32::MAX);
         assert_eq!(character.resource("focus"), Some(5));
         assert!(character.can_spend_resource(&rulebook, "focus", 0));
+    }
+
+    const DERIVED_FIXTURE: &str = r#"
+characteristics:
+  physique:
+    name: Physique
+    min: 1
+    max: 14
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+  psyche:
+    name: Psyche
+    min: 1
+    max: 14
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -2 }
+resources:
+  health:
+    name: Health
+    min: 0
+    start_full: true
+    max_from:
+      - characteristic: physique
+        mode: thresholds
+        thresholds:
+          - { at: 1, value: 10 }
+          - { at: 5, value: 20 }
+          - { at: 8, value: 30 }
+          - { at: 11, value: 40 }
+      - characteristic: psyche
+        mode: per_point
+        base: 0
+        value_per_point: 2
+  focus: { name: Focus, min: 0, max: 5 }
+conditions:
+  hangover:
+    name: Hangover
+    modifiers:
+      characteristics: { psyche: -1 }
+    duration: 4
+starting_character:
+  characteristics: { physique: 11, psyche: 4 }
+"#;
+
+    fn derived_fixture() -> Rulebook {
+        Rulebook::load(DERIVED_FIXTURE)
+            .expect("fixture loads")
+            .rulebook
+    }
+
+    #[test]
+    fn derived_max_sums_thresholds_and_per_point() {
+        let rulebook = derived_fixture();
+        let character = Character::from_starting(&rulebook);
+        // physique 11 -> 40, psyche 4 * 2 -> 8.
+        assert_eq!(character.resource_max(&rulebook, "health"), Some(48));
+        assert_eq!(character.resource("health"), Some(48));
+        // Plain max resources keep working.
+        assert_eq!(character.resource_max(&rulebook, "focus"), Some(5));
+    }
+
+    #[test]
+    fn starting_resources_clamp_to_the_derived_max() {
+        let mut rulebook = derived_fixture();
+        rulebook
+            .starting_character
+            .resources
+            .insert("health".to_string(), 99);
+        let character = Character::from_starting(&rulebook);
+        assert_eq!(character.resource("health"), Some(48));
+    }
+
+    #[test]
+    fn spend_and_restore_respect_the_derived_max() {
+        let rulebook = derived_fixture();
+        let mut character = Character::from_starting(&rulebook);
+        character.spend_resource(&rulebook, "health", 8);
+        assert_eq!(character.resource("health"), Some(40));
+        character.restore_resource(&rulebook, "health", 99);
+        assert_eq!(character.resource("health"), Some(48));
+    }
+
+    #[test]
+    fn conditions_do_not_move_derived_maxima() {
+        let rulebook = derived_fixture();
+        let mut character = Character::from_starting(&rulebook);
+        character.add_condition(&rulebook, "hangover");
+        assert_eq!(character.resource_max(&rulebook, "health"), Some(48));
+    }
+
+    #[test]
+    fn loader_rejects_unknown_derivation_characteristic() {
+        let yaml = r#"
+resources:
+  health:
+    name: Health
+    max_from:
+      - characteristic: missing
+        mode: per_point
+        value_per_point: 2
+"#;
+        let error = Rulebook::load(yaml).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("unknown characteristic `missing`"),
+            "{error}"
+        );
     }
 
     #[test]
