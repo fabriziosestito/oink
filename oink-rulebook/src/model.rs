@@ -673,4 +673,6 @@ pub struct Rulebook {
     pub spells: BTreeMap<String, Spell>,
     pub dice: DiceConfig,
     pub starting_character: StartingCharacter,
+    #[serde(default, rename = "character_creation")]
+    pub creation: Option<CharacterCreation>,
 }
