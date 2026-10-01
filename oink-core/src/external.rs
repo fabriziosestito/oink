@@ -4,7 +4,7 @@ use crate::engine::{CheckRecord, EngineError, Shared};
 use bladeink::story::external_functions::{ExternalFunctionError, ExternalFunctionResult};
 use bladeink::story::Story;
 use bladeink::value_type::ValueType;
-use oink_rulebook::{CheckRequest, Checks};
+use oink_rulebook::{CheckRequest, Checks, CreationPointKind};
 use std::rc::Rc;
 
 pub(crate) fn bind_external_functions(
@@ -299,6 +299,10 @@ pub(crate) fn bind_external_functions(
                 state.rulebook.items.contains_key(&id),
                 format!("unknown item `{id}`"),
             )?;
+            ensure(
+                state.character.meets_prerequisite(&state.rulebook, &id),
+                format!("missing prerequisites for `{id}`"),
+            )?;
             let changes = state.character.add_item(&state.rulebook, &id);
             state.changes.extend(changes);
             void_result()
@@ -360,6 +364,10 @@ pub(crate) fn bind_external_functions(
                 state.rulebook.perks.contains_key(&id),
                 format!("unknown perk `{id}`"),
             )?;
+            ensure(
+                state.character.meets_prerequisite(&state.rulebook, &id),
+                format!("missing prerequisites for `{id}`"),
+            )?;
             let changes = state.character.add_perk(&state.rulebook, &id);
             state.changes.extend(changes);
             void_result()
@@ -411,6 +419,120 @@ pub(crate) fn bind_external_functions(
             let changes = state.character.remove_condition(&id);
             state.changes.extend(changes);
             void_result()
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "points_available", true, move |_name, args| {
+            let kind = parse_creation_kind(&arg_string(args, 0))?;
+            let guard = state.borrow();
+            int_result(
+                i32::try_from(guard.character.points_available(&guard.rulebook, kind))
+                    .unwrap_or(i32::MAX),
+            )
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "spend_point", false, move |_name, args| {
+            let kind = parse_creation_kind(&arg_string(args, 0))?;
+            let id = arg_string(args, 1);
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            bool_result(state.character.spend_point(&state.rulebook, kind, &id))
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "apply_preset", false, move |_name, args| {
+            let id = arg_string(args, 0);
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            bool_result(state.character.apply_preset(&state.rulebook, &id))
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "set_characteristic", false, move |_name, args| {
+            let id = arg_string(args, 0);
+            let value = arg_int(args, 1);
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            bool_result(
+                state
+                    .character
+                    .set_characteristic(&state.rulebook, &id, value),
+            )
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "set_ability", false, move |_name, args| {
+            let id = arg_string(args, 0);
+            let level = arg_int(args, 1);
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            bool_result(state.character.set_ability(&state.rulebook, &id, level))
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "reset_character", false, move |_name, _args| {
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            state.character.reset_character(&state.rulebook);
+            void_result()
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "xp", true, move |_name, _args| {
+            let guard = state.borrow();
+            int_result(i32::try_from(guard.character.xp()).unwrap_or(i32::MAX))
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "add_xp", false, move |_name, args| {
+            let amount = arg_int(args, 0);
+            ensure(amount >= 0, "xp amount must be nonnegative".to_string())?;
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            state.character.add_xp(amount as u32);
+            void_result()
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "level", true, move |_name, _args| {
+            let guard = state.borrow();
+            int_result(i32::try_from(guard.character.level()).unwrap_or(i32::MAX))
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "level_up_ready", true, move |_name, _args| {
+            let guard = state.borrow();
+            bool_result(guard.character.level_up_ready(&guard.rulebook))
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
+        bind(story, "level_up", false, move |_name, _args| {
+            let mut guard = state.borrow_mut();
+            let state = &mut *guard;
+            bool_result(state.character.level_up(&state.rulebook))
         })?;
     }
 
@@ -605,9 +727,12 @@ where
                     "passive_check" => "sisi",
                     "passive_value" | "check_breakdown" => "ssi",
                     "spend_resource" | "restore_resource" => "si",
-                    "check_die" => "i",
+                    "spend_point" => "ss",
+                    "set_characteristic" | "set_ability" => "si",
+                    "check_die" | "add_xp" => "i",
                     "end_scene" | "check_roll" | "check_score" | "check_target"
-                    | "check_margin" | "check_degrees" => "",
+                    | "check_margin" | "check_degrees" | "reset_character" | "xp" | "level"
+                    | "level_up_ready" | "level_up" => "",
                     _ => "s",
                 };
                 if args.len() != signature.len() {
@@ -661,6 +786,11 @@ struct OwnedRequest {
 
 fn external_error(error: impl std::fmt::Display) -> ExternalFunctionError {
     ExternalFunctionError::new(error.to_string())
+}
+
+fn parse_creation_kind(value: &str) -> Result<CreationPointKind, ExternalFunctionError> {
+    CreationPointKind::parse(value)
+        .ok_or_else(|| external_error(format!("unknown point kind `{value}`")))
 }
 
 fn ensure(condition: bool, message: String) -> ExternalFunctionResult {

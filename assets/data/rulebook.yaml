@@ -173,6 +173,11 @@ perks:
     description: Your eyes adjust faster than most.
     modifiers:
       tags: { dark: 2 }
+  eagle_eyes:
+    name: Eagle Eyes
+    description: Training for sharp eyes in the dark.
+    modifiers:
+      tags: { dark: 1 }
 
 conditions:
   shaken:
@@ -247,3 +252,41 @@ starting_character:
   perks: [artist]
   inventory: [rusty_cleaver, cigarette]
   resources: { focus: 3 }
+
+character_creation:
+  mode: pool
+  base:
+    characteristics: { intellect: 3, psyche: 4, physique: 2, motorics: 3 }
+    abilities: { logic: 1, empathy: 2, endurance: 1 }
+  pools:
+    characteristic_points: 3
+    ability_points: 2
+    perk_points: 1
+  costs:
+    characteristics: 1
+    abilities: 1
+  validate: all_points_spent
+  presets:
+    veteran:
+      name: Veteran
+      characteristics: { intellect: 5, physique: 4 }
+      abilities: { endurance: 2 }
+      perks: [eagle_eyes]
+      tags: [thief]
+
+prerequisites:
+  eagle_eyes:
+    requires:
+      characteristics: { intellect: 5 }
+
+levelling:
+  max_level: 3
+  xp_curve:
+    - { level: 2, xp: 100 }
+    - { level: 3, xp: 250 }
+  rewards:
+    per_level:
+      ability_points: 1
+    interval:
+      every: 3
+      perk_points: 1

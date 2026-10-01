@@ -51,15 +51,6 @@ make sim    # play the demo story
 make test   # the engine walks the demo story in milliseconds
 ```
 
-The simulator always loads `assets/story/main.ink`. To try another story,
-copy it over `main.ink` first:
-
-```sh
-cp assets/story/demo_d6.ink assets/story/main.ink && make sim    # 2d6 checks
-cp assets/story/demo_d20.ink assets/story/main.ink && make sim   # 1d20 heroic checks
-git checkout -- assets/story/main.ink                            # restore the demo story
-```
-
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full command list and the
 simulator controls.
 

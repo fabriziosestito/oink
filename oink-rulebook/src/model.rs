@@ -656,6 +656,64 @@ pub struct CharacterCreation {
     pub presets: BTreeMap<String, CreationPreset>,
 }
 
+/// Minimum values gating one perk, ability, item, or spell by id.
+/// Characteristics read stored values, abilities read owned levels
+/// (0 when absent), resources read current balances.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Requirement {
+    pub characteristics: BTreeMap<String, i32>,
+    pub abilities: BTreeMap<String, i32>,
+    pub resources: BTreeMap<String, i32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Prerequisite {
+    pub requires: Requirement,
+}
+
+/// XP needed to reach one level.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LevelThreshold {
+    pub level: u32,
+    pub xp: u32,
+}
+
+/// Points granted at every level.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct LevelPoints {
+    pub characteristic_points: u32,
+    pub ability_points: u32,
+}
+
+/// Extra points granted every N levels. Absent means no interval rewards.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LevelInterval {
+    pub every: u32,
+    pub perk_points: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct LevelRewards {
+    pub per_level: LevelPoints,
+    #[serde(default)]
+    pub interval: Option<LevelInterval>,
+}
+
+/// XP curve, level cap, and rewards. Absent means no levelling: XP banks
+/// without effect and level checks stay false.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Levelling {
+    pub max_level: u32,
+    #[serde(default)]
+    pub xp_curve: Vec<LevelThreshold>,
+    #[serde(default)]
+    pub rewards: LevelRewards,
+}
+
 /// The full rulebook: every resource definition plus the starting character.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -675,4 +733,8 @@ pub struct Rulebook {
     pub starting_character: StartingCharacter,
     #[serde(default, rename = "character_creation")]
     pub creation: Option<CharacterCreation>,
+    #[serde(default)]
+    pub levelling: Option<Levelling>,
+    #[serde(default)]
+    pub prerequisites: BTreeMap<String, Prerequisite>,
 }
