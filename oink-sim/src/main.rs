@@ -129,7 +129,7 @@ fn render(
             }
         }
         None => {
-            Text::new("~ GAME OVER ~", Point::new(MARGIN, y), style).draw(display)?;
+            Text::new("~ La tua vita e la tua missione terminano qui ~", Point::new(MARGIN, y), style).draw(display)?;
         }
     }
 
