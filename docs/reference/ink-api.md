@@ -129,6 +129,7 @@ The corridor is dark.
 | `characteristic(id)` | integer | Returns the stored characteristic value |
 | `characteristic_bonus(id)` | integer | Returns its threshold bonus |
 | `resource(id)` | integer | Returns the current resource balance |
+| `resource_max(id)` | integer | Returns the effective maximum, derived when `max_from` is set |
 | `spend_resource(id, amount)` | boolean | Pays the full amount or returns false without a change |
 | `restore_resource(id, amount)` | boolean | Restores up to the maximum; true if the balance changed |
 

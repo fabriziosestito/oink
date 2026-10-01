@@ -630,6 +630,40 @@ Focus: {resource("focus")}.
     }
 
     #[test]
+    fn resource_max_binding_reports_the_maximum() {
+        let data = GameData::from_yaml(
+            "title: Test",
+            "resources:\n  focus: { name: Focus, min: 0, max: 5 }\n",
+        )
+        .unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL resource_max(id)\nMax {resource_max(\"focus\")}.\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        assert!(text.join(" ").contains("Max 5."), "{text:?}");
+
+        let data = GameData::from_yaml(
+            "title: Test",
+            "resources:\n  focus: { name: Focus, min: 0, max: 5 }\n",
+        )
+        .unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL resource_max(id)\nMax {resource_max(\"nope\")}.\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let error = engine.start().unwrap_err();
+        assert!(
+            error.to_string().contains("unknown resource `nope`"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn wrong_argument_types_fail_instead_of_using_defaults() {
         let mut engine = example_engine(
             r#"

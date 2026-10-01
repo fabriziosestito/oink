@@ -54,6 +54,9 @@ impl Rulebook {
         for characteristic in self.characteristics.values_mut() {
             characteristic.bonus.sort_thresholds();
         }
+        for resource in self.resources.values_mut() {
+            resource.sort_thresholds();
+        }
     }
 
     fn parse_dice(&mut self, errors: &mut Vec<String>) {
@@ -236,11 +239,19 @@ impl Rulebook {
         }
 
         for (id, resource) in &self.resources {
-            if resource.min > resource.max {
+            if resource.max_from.is_empty() && resource.min > resource.max {
                 errors.push(format!(
                     "resource `{id}`: min {} is greater than max {}",
                     resource.min, resource.max
                 ));
+            }
+            for entry in &resource.max_from {
+                if !self.characteristics.contains_key(&entry.characteristic) {
+                    errors.push(format!(
+                        "resource `{id}` derives from unknown characteristic `{}`",
+                        entry.characteristic
+                    ));
+                }
             }
         }
 

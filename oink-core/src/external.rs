@@ -475,6 +475,19 @@ pub(crate) fn bind_external_functions(
 
     {
         let state = Rc::clone(state);
+        bind(story, "resource_max", true, move |_name, args| {
+            let id = arg_string(args, 0);
+            let guard = state.borrow();
+            let value = guard
+                .character
+                .resource_max(&guard.rulebook, &id)
+                .ok_or_else(|| external_error(format!("unknown resource `{id}`")))?;
+            int_result(value)
+        })?;
+    }
+
+    {
+        let state = Rc::clone(state);
         bind(story, "spend_resource", false, move |_name, args| {
             let id = arg_string(args, 0);
             let amount = arg_int(args, 1);

@@ -87,18 +87,19 @@ impl Character {
         character.inventory = starting.inventory.iter().cloned().collect();
 
         for (id, definition) in &rulebook.resources {
+            let max = definition.derived_max(&character.characteristics);
             let value = starting
                 .resources
                 .get(id)
                 .copied()
                 .unwrap_or(if definition.start_full {
-                    definition.max
+                    max
                 } else {
                     definition.min
                 });
             character
                 .resources
-                .insert(id.clone(), value.clamp(definition.min, definition.max));
+                .insert(id.clone(), value.clamp(definition.min, max));
         }
 
         character.apply_grants(rulebook);
@@ -142,7 +143,10 @@ impl Character {
     }
 
     pub fn resource_max(&self, rulebook: &Rulebook, id: &str) -> Option<i32> {
-        rulebook.resources.get(id).map(|definition| definition.max)
+        rulebook
+            .resources
+            .get(id)
+            .map(|definition| definition.derived_max(&self.characteristics))
     }
 
     pub fn perk_ids(&self) -> impl Iterator<Item = &String> {
@@ -394,8 +398,10 @@ impl Character {
         let Some(current) = self.resources.get(id).copied() else {
             return Vec::new();
         };
-        let next = (i64::from(current) + i64::from(delta))
-            .clamp(i64::from(definition.min), i64::from(definition.max)) as i32;
+        let next = (i64::from(current) + i64::from(delta)).clamp(
+            i64::from(definition.min),
+            i64::from(definition.derived_max(&self.characteristics)),
+        ) as i32;
         if next == current {
             return Vec::new();
         }

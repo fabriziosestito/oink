@@ -208,19 +208,36 @@ the sheet stops changing.
 
 ## Resources
 
-Resources require `name` and integer `max`. They accept integer `min`
-(default 0) and boolean `start_full` (default true).
-`starting_character.resources` overrides the initial value.
+Resources require `name` and either integer `max` or a `max_from` derivation
+list. They accept integer `min` (default 0) and boolean `start_full`
+(default true). `starting_character.resources` overrides the initial value.
 
 ```yaml
 resources:
-  health: { name: Health, min: 0, max: 3 }
+  health:
+    name: Health
+    min: 0
+    max_from:
+      - characteristic: physique
+        mode: thresholds
+        thresholds:
+          - { at: 1, value: 10 }
+          - { at: 11, value: 40 }
+      - characteristic: psyche
+        mode: per_point
+        base: 0
+        value_per_point: 2
   focus: { name: Focus, min: 0, max: 5, start_full: false }
 ```
 
+A `thresholds` entry reads the highest `at` the characteristic reaches, like a
+bonus table. A `per_point` entry computes `base + value_per_point *
+characteristic`. Entries sum together, and derivation reads stored
+characteristic values, so temporary conditions never move resource maxima.
+Character creation pools are not implemented yet.
+
 Starting values are clamped to the bounds. Payments are all-or-nothing above
-the minimum. Restoration stops at the maximum. Derived resource maxima and
-character creation pools are not implemented yet.
+the minimum. Restoration stops at the maximum.
 
 ## Spells
 
