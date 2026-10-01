@@ -27,7 +27,7 @@ pub enum Event {
         text: Vec<String>,
         choices: Vec<Choice>,
     },
-    /// The story reached an end.
+    /// The story reached an end. "La tua vita e la tua missione terminano qui."
     TheEnd { text: Vec<String> },
 }
 
