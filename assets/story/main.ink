@@ -1,11 +1,10 @@
-// Debug story: spend points, print the sheet, then checks, items and one
-// spell with small roll readouts. Run it with:
-//   cp assets/story/demo_debug.ink assets/story/main.ink && make sim
-//
+// Mountain pass: body-or-mind creation, a sheet summary, then trials,
+// a heroic climb, a spell, a level-up milestone and a verdict.
 // Note: multi-branch "- condition:" blocks do not work with bladeink,
 // so outcomes use nested conditionals.
 
 EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
+EXTERNAL passive_check(ability, dc, tags, modifier)
 EXTERNAL check_roll()
 EXTERNAL points_available(kind)
 EXTERNAL spend_point(kind, id)
@@ -13,6 +12,7 @@ EXTERNAL apply_preset(id)
 EXTERNAL characteristic(id)
 EXTERNAL ability_level(id)
 EXTERNAL add_perk(id)
+EXTERNAL has_item(id)
 EXTERNAL add_item(id)
 EXTERNAL use_item(id)
 EXTERNAL has_condition(id)
@@ -31,21 +31,24 @@ EXTERNAL cast_spell(id)
 VAR outcome = ""
 VAR ready = false
 
-New recruit. Spend first.
-+ [Veteran preset]
+Snow on the high pass. A courier run, alone.
++ [Take the veteran preset]
     ~ apply_preset("veteran")
-    -> sheet
-+ [Spend yourself]
+    No questions asked. -> sheet
++ [Train yourself]
     -> spend
 
 === spend ===
-Body points: {points_available("characteristic")}.
+Body or mind? Points: {points_available("characteristic")}.
 { points_available("characteristic") > 0:
-    * [Intellect +1]
+    * [Build Physique]
+        ~ spend_point("characteristic", "physique")
+        -> spend
+    * [Sharpen Intellect]
         ~ spend_point("characteristic", "intellect")
         -> spend
-    * [Physique +1]
-        ~ spend_point("characteristic", "physique")
+    * [Sharpen Psyche]
+        ~ spend_point("characteristic", "psyche")
         -> spend
     * [Done]
         -> sheet
@@ -57,60 +60,96 @@ Body points: {points_available("characteristic")}.
 INT {characteristic("intellect")} PSY {characteristic("psyche")} PHY {characteristic("physique")} MOT {characteristic("motorics")}.
 Logic {ability_level("logic")} Empathy {ability_level("empathy")} Endurance {ability_level("endurance")}.
 Focus {resource("focus")}/{resource_max("focus")}. Level {level()}, XP {xp()}.
-+ [Continue]
-    -> trial
++ [Shoulder the pack]
+    -> pass1
 
-=== trial ===
+=== pass1 ===
 ~ enter_environment("dark")
-A locked door in the dark.
-* [Pick it]
-    ~ outcome = roll_check("lockpicking", 6, "thief", 0, "standard")
-    Roll {check_roll()}: {outcome}. -> vault
-* [Break it]
+The ravine is dark. Loose stones tick above.
+{ passive_check("logic", 5, "", 0):
+    You spot the warning cairn in time.
+}
+* [Climb the rockfall]
     ~ outcome = roll_check("endurance", 8, "", 0, "standard")
-    Roll {check_roll()}: {outcome}. -> vault
+    Roll {check_roll()}: {outcome}. -> shrine
+* [Light a lantern first]
+    ~ add_item("lantern")
+    { has_item("lantern"):
+        Warm light. -> shrine
+    }
 
-=== vault ===
-Supplies and a lantern.
-~ add_item("lantern")
+=== shrine ===
+A wayside shrine, older than the guild.
+~ outcome = roll_check("logic", 8, "", 0, "standard")
+Roll {check_roll()}: {outcome}.
+{ outcome == "success" or outcome == "critical_success":
+    The runes align. -> keeper
+- else:
+    The runes stay silent. -> keeper
+}
+
+=== keeper ===
 ~ clear_environment("dark")
-The quartermaster nods at sharp minds.
-+ { characteristic("intellect") >= 5 } [Take eagle-eyes]
+The shrine-keeper offers night-sight training, for sharp minds only.
++ { characteristic("intellect") >= 5 } [Accept eagle-eyes training]
     ~ add_perk("eagle_eyes")
-    -> magic
-+ [Move on]
-    -> magic
+    -> eyrie
++ [Leave an offering]
+    -> eyrie
 
-=== magic ===
-Focus {resource("focus")}/{resource_max("focus")}, spell costs 2.
-* [Cast telekinesis]
+=== eyrie ===
+The storm breaks over the ridge. One rope, one chance.
+~ outcome = roll_check("endurance", 12, "", 0, "heroic")
+Roll {check_roll()}: {outcome}.
+{ outcome == "critical_success":
+    You dance up the ice. -> nightcamp
+- else:
+    { outcome == "success":
+        Slow and steady. -> nightcamp
+    - else:
+        { outcome == "critical_failure":
+            The rope sings, then holds. Barely. -> nightcamp
+        - else:
+            You haul yourself up, shaking. -> nightcamp
+        }
+    }
+}
+
+=== nightcamp ===
+~ use_item("cigarette")
+{ has_condition("nicotine_rush"):
+    Steady hands for the spell.
+}
+Focus {resource("focus")}/{resource_max("focus")}, the working costs 2.
+* [Cast light into the dark]
     ~ outcome = cast_spell("telekinesis")
     Roll {check_roll()}: {outcome}. -> milestone
-* [Smoke instead]
-    ~ use_item("cigarette")
-    { has_condition("nicotine_rush"):
-        Steady.
-    }
+* [Save your strength]
     -> milestone
 
 === milestone ===
-~ add_xp(120)
+~ add_xp(150)
 ~ ready = level_up_ready()
 { ready:
     Something settles into place. Level {level()}. -> levelup
 - else:
-    -> finale
+    -> verdict
 }
 
 === levelup ===
-~ level_up()
-Spend the new point.
-* [Sharpen Empathy]
+* [Keen senses: empathy +1]
     ~ spend_point("ability", "empathy")
-    -> finale
-* [Trust your gut]
-    -> finale
+    -> verdict
+* [Move on]
+    -> verdict
 
-=== finale ===
+=== verdict ===
 ~ end_scene()
-Done. -> END
+The guild seal waits at the pass head.
+* [Ask for judgment]
+    ~ outcome = roll_check("empathy", 10, "artist", 0, "standard")
+    { outcome == "success" or outcome == "critical_success":
+        "The pass is open," Oka says. -> END
+    - else:
+        "The mountain waits," Oka says. -> END
+    }
