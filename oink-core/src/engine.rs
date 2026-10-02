@@ -270,14 +270,14 @@ mod tests {
             panic!("expected choices")
         };
         assert_eq!(choices.len(), 2);
-        assert!(text.join(" ").contains("New recruit"));
+        assert!(text.join(" ").contains("Snow on the high pass"));
 
         // Spend path reaches the sheet with unspent points shown.
         let event = engine.choose(1).unwrap();
         let Event::Scene { text, .. } = event else {
             panic!("expected the spend scene")
         };
-        assert!(text.join(" ").contains("Body points: 3."));
+        assert!(text.join(" ").contains("Body or mind?"));
     }
 
     #[test]
@@ -300,12 +300,11 @@ mod tests {
             engine.set_seed(7);
             engine.start().unwrap();
 
-            // Veteran preset, continue, then either trial branch.
+            // Veteran preset, continue, then either pass1 branch.
             // Every outcome of either check reaches the end.
-            engine.choose(0).unwrap();
-            engine.choose(0).unwrap();
-            let event = engine.choose(trial_pick).unwrap();
-            let mut event = event;
+            let mut event = engine.choose(0).unwrap();
+            event = engine.choose(0).unwrap();
+            event = engine.choose(trial_pick).unwrap();
             let mut steps = 0;
             loop {
                 match event {
@@ -322,14 +321,14 @@ mod tests {
     }
 
     #[test]
-    fn smoke_applies_condition_and_vault_clears_dark() {
+    fn smoke_applies_condition_and_keeper_clears_dark() {
         let mut engine = demo_engine();
         engine.start().unwrap();
 
-        // Spend path keeps the starting inventory: skip spending,
-        // skip training, break the grate, move on, then smoke.
+        // Spend path keeps the starting inventory: skip all spending,
+        // take the lantern branch, move on, then smoke.
         let mut event = None;
-        for pick in [1, 2, 0, 1, 0, 1, 0] {
+        for pick in [1, 3, 0, 1, 0, 1, 0, 0] {
             event = Some(engine.choose(pick).unwrap());
         }
         assert!(matches!(event, Some(Event::TheEnd { .. })));
@@ -400,15 +399,23 @@ Focus is {resource("focus")}.
         engine.start().unwrap();
         assert!(engine.take_checks().is_empty());
 
-        // Veteran preset, continue, pick the lock: one active record.
+        // Veteran preset, continue: the pass1 passive records once.
         engine.set_seed(7);
-        engine.choose(0).unwrap();
         engine.choose(0).unwrap();
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
         assert_eq!(checks.len(), 1);
-        assert_eq!(checks[0].ability, "lockpicking");
-        assert!(checks[0].dice.is_some());
+        assert_eq!(checks[0].ability, "logic");
+        assert_eq!(checks[0].outcome, "pass");
+        assert!(checks[0].dice.is_none());
+
+        // Climb, then the shrine rolls too: two active records.
+        engine.choose(0).unwrap();
+        let checks = engine.take_checks();
+        assert_eq!(checks.len(), 2);
+        assert_eq!(checks[0].ability, "endurance");
+        assert_eq!(checks[1].ability, "logic");
+        assert!(checks.iter().all(|c| c.dice.is_some()));
         assert!(!checks[0].breakdown.entries.is_empty());
     }
 
@@ -419,9 +426,10 @@ Focus is {resource("focus")}.
         engine.start().unwrap();
         engine.choose(0).unwrap();
         engine.choose(0).unwrap();
+        engine.take_checks();
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
-        assert_eq!(checks.len(), 1);
+        assert_eq!(checks.len(), 2);
         let roll = checks[0].dice.clone().expect("active check rolls dice");
         let description = checks[0].describe();
         assert!(
@@ -433,23 +441,23 @@ Focus is {resource("focus")}.
             "{description}"
         );
         assert!(description.contains("score"), "{description}");
-        assert!(description.contains("target 6"), "{description}");
+        assert!(description.contains("target 8"), "{description}");
     }
 
     #[test]
-    fn vault_grants_the_lantern() {
+    fn lantern_branch_lights_the_way() {
         let mut engine = demo_engine();
         engine.start().unwrap();
 
-        // Veteran preset, continue, pick the lock: the vault scene grants
+        // Veteran preset, continue, light a lantern: the pass1 branch grants
         // the lantern and shows it.
         engine.choose(0).unwrap();
         engine.choose(0).unwrap();
-        let event = engine.choose(0).unwrap();
+        let event = engine.choose(1).unwrap();
         let Event::Scene { text, .. } = event else {
-            panic!("expected the vault scene")
+            panic!("expected the keeper scene")
         };
-        assert!(text.join(" ").contains("Supplies and a lantern"));
+        assert!(text.join(" ").contains("Warm light"));
         assert!(engine.character().has_item("lantern"));
     }
 
@@ -536,7 +544,7 @@ First.
     }
 
     #[test]
-    fn recruit_story_runs_both_openings() {
+    fn mountain_story_runs_both_openings() {
         let ink = include_str!("../../assets/story/main.ink");
         let data = GameData::from_yaml(
             include_str!("../../assets/data/config.yaml"),
@@ -544,39 +552,48 @@ First.
         )
         .unwrap();
         assert!(data.warnings.is_empty(), "warnings: {:?}", data.warnings);
-        for first in [0, 1] {
-            let mut engine = Engine::new(ink, data.clone()).unwrap();
-            engine.set_seed(7);
-            let mut event = engine.start().unwrap();
-            let mut transcript = String::new();
-            let mut steps = 0;
-            let end = loop {
-                match event {
-                    Event::TheEnd { text } => break text.join(" "),
-                    Event::Scene { text, choices } => {
-                        transcript.push_str(&text.join(" "));
-                        transcript.push(' ');
-                        steps += 1;
-                        assert!(steps < 40, "demo did not end");
-                        assert!(!choices.is_empty());
-                        let at = if steps == 1 {
-                            first.min(choices.len() - 1)
-                        } else {
-                            0
-                        };
-                        event = engine.choose(at).unwrap();
+        let mut open = false;
+        let mut waits = false;
+        for seed in 0..40 {
+            for first in [0, 1] {
+                let mut engine = Engine::new(ink, data.clone()).unwrap();
+                engine.set_seed(seed);
+                let mut event = engine.start().unwrap();
+                let mut transcript = String::new();
+                let mut steps = 0;
+                let end = loop {
+                    match event {
+                        Event::TheEnd { text } => break text.join(" "),
+                        Event::Scene { text, choices } => {
+                            transcript.push_str(&text.join(" "));
+                            transcript.push(' ');
+                            steps += 1;
+                            assert!(steps < 60, "demo did not end");
+                            assert!(!choices.is_empty());
+                            let at = if steps == 1 {
+                                first.min(choices.len() - 1)
+                            } else {
+                                0
+                            };
+                            event = engine.choose(at).unwrap();
+                        }
                     }
+                };
+                assert!(!transcript.contains("outcome =="), "leak: {transcript}");
+                assert!(transcript.contains("INT "), "{transcript}");
+                assert!(
+                    transcript.contains("settles into place"),
+                    "milestone missing: {transcript}"
+                );
+                if end.contains("pass is open") {
+                    open = true;
                 }
-            };
-            assert!(!transcript.contains("outcome =="), "leak: {transcript}");
-            assert!(transcript.contains("INT "), "{transcript}");
-            assert!(transcript.contains("Focus "), "{transcript}");
-            assert!(
-                transcript.contains("settles into place"),
-                "milestone did not trigger: {transcript}"
-            );
-            assert!(end.contains("Done."), "{end}");
+                if end.contains("mountain waits") {
+                    waits = true;
+                }
+            }
         }
+        assert!(open && waits);
     }
 
     #[test]
