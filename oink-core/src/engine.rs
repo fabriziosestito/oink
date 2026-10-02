@@ -302,9 +302,9 @@ mod tests {
 
             // Veteran preset, continue, then either pass1 branch.
             // Every outcome of either check reaches the end.
-            let mut event = engine.choose(0).unwrap();
-            event = engine.choose(0).unwrap();
-            event = engine.choose(trial_pick).unwrap();
+            engine.choose(0).unwrap();
+            engine.choose(0).unwrap();
+            let mut event = engine.choose(trial_pick).unwrap();
             let mut steps = 0;
             loop {
                 match event {
