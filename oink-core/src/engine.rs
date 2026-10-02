@@ -329,7 +329,7 @@ mod tests {
         // Spend path keeps the starting inventory: skip spending,
         // skip training, break the grate, move on, then smoke.
         let mut event = None;
-        for pick in [1, 2, 0, 1, 0, 1] {
+        for pick in [1, 2, 0, 1, 0, 1, 0] {
             event = Some(engine.choose(pick).unwrap());
         }
         assert!(matches!(event, Some(Event::TheEnd { .. })));
@@ -571,6 +571,10 @@ First.
             assert!(!transcript.contains("outcome =="), "leak: {transcript}");
             assert!(transcript.contains("INT "), "{transcript}");
             assert!(transcript.contains("Focus "), "{transcript}");
+            assert!(
+                transcript.contains("settles into place"),
+                "milestone did not trigger: {transcript}"
+            );
             assert!(end.contains("Done."), "{end}");
         }
     }

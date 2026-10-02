@@ -380,7 +380,9 @@ d12,
 d20, and d%. Use keep notation
 for advantage pools, such as `2d20kh1` and `2d20kl1`. `d100` and `1d100`
 are aliases for `d%`. A plain `2d10` stays a sum. When the section is absent,
-the loader inserts the 2d6 standard profile above.
+the loader inserts the 2d6 standard profile above. That profile keeps the old
+double-based criticals and adds margin-based ones: margin 5 or more is a
+critical success, margin -5 or less is a critical failure.
 
 ## Starting character
 

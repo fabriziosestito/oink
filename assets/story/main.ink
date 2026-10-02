@@ -23,9 +23,13 @@ EXTERNAL resource(id)
 EXTERNAL resource_max(id)
 EXTERNAL level()
 EXTERNAL xp()
+EXTERNAL add_xp(amount)
+EXTERNAL level_up_ready()
+EXTERNAL level_up()
 EXTERNAL cast_spell(id)
 
 VAR outcome = ""
+VAR ready = false
 
 New recruit. Spend first.
 + [Veteran preset]
@@ -81,12 +85,30 @@ The quartermaster nods at sharp minds.
 Focus {resource("focus")}/{resource_max("focus")}, spell costs 2.
 * [Cast telekinesis]
     ~ outcome = cast_spell("telekinesis")
-    Roll {check_roll()}: {outcome}. -> finale
+    Roll {check_roll()}: {outcome}. -> milestone
 * [Smoke instead]
     ~ use_item("cigarette")
     { has_condition("nicotine_rush"):
         Steady.
     }
+    -> milestone
+
+=== milestone ===
+~ add_xp(120)
+~ ready = level_up_ready()
+{ ready:
+    Something settles into place. Level {level()}. -> levelup
+- else:
+    -> finale
+}
+
+=== levelup ===
+~ level_up()
+Spend the new point.
+* [Sharpen Empathy]
+    ~ spend_point("ability", "empathy")
+    -> finale
+* [Trust your gut]
     -> finale
 
 === finale ===
