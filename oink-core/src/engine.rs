@@ -269,14 +269,15 @@ mod tests {
         let Event::Scene { text, choices } = event else {
             panic!("expected choices")
         };
-        assert_eq!(choices.len(), 3);
-        assert!(text
-            .join(" ")
-            .contains("Something in the troll's grip is not as steady"));
+        assert_eq!(choices.len(), 2);
+        assert!(text.join(" ").contains("Snow on the high pass"));
 
-        // Talk to the troll -> victory -> END
+        // Spend path reaches the sheet with unspent points shown.
         let event = engine.choose(1).unwrap();
-        assert!(matches!(event, Event::TheEnd { .. }));
+        let Event::Scene { text, .. } = event else {
+            panic!("expected the spend scene")
+        };
+        assert!(text.join(" ").contains("Body or mind?"));
     }
 
     #[test]
@@ -293,33 +294,54 @@ mod tests {
     }
 
     #[test]
-    fn fight_path_calls_external_functions() {
-        let mut engine = demo_engine();
-        engine.set_seed(7);
-        engine.start().unwrap();
+    fn trial_checks_reach_the_end() {
+        for trial_pick in [0, 1] {
+            let mut engine = demo_engine();
+            engine.set_seed(7);
+            engine.start().unwrap();
 
-        // Charge the troll. Every outcome of the check reaches the end.
-        let event = engine.choose(0).unwrap();
-        assert!(matches!(event, Event::TheEnd { .. }));
+            // Veteran preset, continue, then either pass1 branch.
+            // Every outcome of either check reaches the end.
+            engine.choose(0).unwrap();
+            engine.choose(0).unwrap();
+            let mut event = engine.choose(trial_pick).unwrap();
+            let mut steps = 0;
+            loop {
+                match event {
+                    Event::TheEnd { .. } => break,
+                    Event::Scene { choices, .. } => {
+                        steps += 1;
+                        assert!(steps < 20, "trial did not end");
+                        event = engine.choose(0).unwrap();
+                        let _ = choices;
+                    }
+                }
+            }
+        }
     }
 
     #[test]
-    fn victory_applies_condition_and_clears_environment() {
+    fn smoke_applies_condition_and_keeper_clears_dark() {
         let mut engine = demo_engine();
         engine.start().unwrap();
 
-        let event = engine.choose(1).unwrap();
-        assert!(matches!(event, Event::TheEnd { .. }));
+        // Spend path keeps the starting inventory: skip all spending,
+        // take the lantern branch, move on, then smoke.
+        let mut event = None;
+        for pick in [1, 3, 0, 1, 0, 1, 0, 0] {
+            event = Some(engine.choose(pick).unwrap());
+        }
+        assert!(matches!(event, Some(Event::TheEnd { .. })));
 
         {
             let character = engine.character();
-            assert!(character.has_condition("shaken"));
+            assert!(character.has_condition("nicotine_rush"));
             assert!(!character.has_environment("dark"));
         }
 
         let changes = engine.take_changes();
         let described: Vec<String> = changes.iter().map(StateChange::to_string).collect();
-        assert!(described.iter().any(|line| line.contains("shaken")));
+        assert!(described.iter().any(|line| line.contains("nicotine_rush")));
         assert!(described.iter().any(|line| line.contains("dark")));
     }
 
@@ -375,19 +397,25 @@ Focus is {resource("focus")}.
     fn checks_are_recorded_for_the_ui() {
         let mut engine = demo_engine();
         engine.start().unwrap();
+        assert!(engine.take_checks().is_empty());
 
-        let checks = engine.take_checks();
-        assert_eq!(checks.len(), 1);
-        assert_eq!(checks[0].ability, "empathy");
-        assert_eq!(checks[0].outcome, "pass");
-        assert!(checks[0].dice.is_none());
-
+        // Veteran preset, continue: the pass1 passive records once.
         engine.set_seed(7);
+        engine.choose(0).unwrap();
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
         assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0].ability, "logic");
+        assert_eq!(checks[0].outcome, "pass");
+        assert!(checks[0].dice.is_none());
+
+        // Climb, then the shrine rolls too: two active records.
+        engine.choose(0).unwrap();
+        let checks = engine.take_checks();
+        assert_eq!(checks.len(), 2);
         assert_eq!(checks[0].ability, "endurance");
-        assert!(checks[0].dice.is_some());
+        assert_eq!(checks[1].ability, "logic");
+        assert!(checks.iter().all(|c| c.dice.is_some()));
         assert!(!checks[0].breakdown.entries.is_empty());
     }
 
@@ -396,12 +424,12 @@ Focus is {resource("focus")}.
         let mut engine = demo_engine();
         engine.set_seed(7);
         engine.start().unwrap();
-
-        let checks = engine.take_checks();
-        assert!(checks[0].describe().contains("sense:"));
-
+        engine.choose(0).unwrap();
+        engine.choose(0).unwrap();
+        engine.take_checks();
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
+        assert_eq!(checks.len(), 2);
         let roll = checks[0].dice.clone().expect("active check rolls dice");
         let description = checks[0].describe();
         assert!(
@@ -413,26 +441,24 @@ Focus is {resource("focus")}.
             "{description}"
         );
         assert!(description.contains("score"), "{description}");
-        assert!(description.contains("target 10"), "{description}");
+        assert!(description.contains("target 8"), "{description}");
     }
 
     #[test]
-    fn items_gate_later_scenes() {
+    fn lantern_branch_lights_the_way() {
         let mut engine = demo_engine();
         engine.start().unwrap();
 
-        // Search the toll booth. The wizard tag lights the way.
-        let event = engine.choose(2).unwrap();
+        // Veteran preset, continue, light a lantern: the pass1 branch grants
+        // the lantern and shows it.
+        engine.choose(0).unwrap();
+        engine.choose(0).unwrap();
+        let event = engine.choose(1).unwrap();
         let Event::Scene { text, .. } = event else {
-            panic!("expected the waiting scene")
+            panic!("expected the keeper scene")
         };
-        assert!(text
-            .join(" ")
-            .contains("The lantern throws the troll's shadow"));
+        assert!(text.join(" ").contains("Warm light"));
         assert!(engine.character().has_item("lantern"));
-
-        let event = engine.choose(0).unwrap();
-        assert!(matches!(event, Event::TheEnd { .. }));
     }
 
     fn example_engine(ink: &str) -> Engine {
@@ -515,6 +541,59 @@ First.
             panic!("expected end")
         };
         assert!(text.join(" ").contains("Score "), "{text:?}");
+    }
+
+    #[test]
+    fn mountain_story_runs_both_openings() {
+        let ink = include_str!("../../assets/story/main.ink");
+        let data = GameData::from_yaml(
+            include_str!("../../assets/data/config.yaml"),
+            include_str!("../../assets/data/rulebook.yaml"),
+        )
+        .unwrap();
+        assert!(data.warnings.is_empty(), "warnings: {:?}", data.warnings);
+        let mut open = false;
+        let mut waits = false;
+        for seed in 0..40 {
+            for first in [0, 1] {
+                let mut engine = Engine::new(ink, data.clone()).unwrap();
+                engine.set_seed(seed);
+                let mut event = engine.start().unwrap();
+                let mut transcript = String::new();
+                let mut steps = 0;
+                let end = loop {
+                    match event {
+                        Event::TheEnd { text } => break text.join(" "),
+                        Event::Scene { text, choices } => {
+                            transcript.push_str(&text.join(" "));
+                            transcript.push(' ');
+                            steps += 1;
+                            assert!(steps < 60, "demo did not end");
+                            assert!(!choices.is_empty());
+                            let at = if steps == 1 {
+                                first.min(choices.len() - 1)
+                            } else {
+                                0
+                            };
+                            event = engine.choose(at).unwrap();
+                        }
+                    }
+                };
+                assert!(!transcript.contains("outcome =="), "leak: {transcript}");
+                assert!(transcript.contains("INT "), "{transcript}");
+                assert!(
+                    transcript.contains("settles into place"),
+                    "milestone missing: {transcript}"
+                );
+                if end.contains("pass is open") {
+                    open = true;
+                }
+                if end.contains("mountain waits") {
+                    waits = true;
+                }
+            }
+        }
+        assert!(open && waits);
     }
 
     #[test]
@@ -627,6 +706,140 @@ Focus: {resource("focus")}.
         assert!(text.join(" ").contains("Not paid."));
         assert_eq!(engine.character().resource("focus"), Some(3));
         assert!(engine.take_changes().is_empty());
+    }
+
+    #[test]
+    fn resource_max_binding_reports_the_maximum() {
+        let data = GameData::from_yaml(
+            "title: Test",
+            "resources:\n  focus: { name: Focus, min: 0, max: 5 }\n",
+        )
+        .unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL resource_max(id)\nMax {resource_max(\"focus\")}.\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        assert!(text.join(" ").contains("Max 5."), "{text:?}");
+
+        let data = GameData::from_yaml(
+            "title: Test",
+            "resources:\n  focus: { name: Focus, min: 0, max: 5 }\n",
+        )
+        .unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL resource_max(id)\nMax {resource_max(\"nope\")}.\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let error = engine.start().unwrap_err();
+        assert!(
+            error.to_string().contains("unknown resource `nope`"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn creation_bindings_spend_and_apply_presets() {
+        let yaml = "characteristics:\n  physique: { name: Physique, min: 1, max: 14 }\ncharacter_creation:\n  pools: { characteristic_points: 10 }\n  presets:\n    bruiser: { name: Bruiser, characteristics: { physique: 8 } }\n";
+        let data = GameData::from_yaml("title: Test", yaml).unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL points_available(kind)\nEXTERNAL spend_point(kind, id)\nEXTERNAL apply_preset(id)\nPoints {points_available(\"characteristic\")}.\n~ spend_point(\"characteristic\", \"physique\")\nLeft {points_available(\"characteristic\")}.\n~ apply_preset(\"bruiser\")\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        let joined = text.join(" ");
+        assert!(joined.contains("Points 10."), "{joined}");
+        assert!(joined.contains("Left 9."), "{joined}");
+        assert_eq!(engine.character().characteristic("physique"), Some(8));
+
+        let data = GameData::from_yaml(
+            "title: Test",
+            "characteristics:\n  physique: { name: Physique, min: 1, max: 14 }\ncharacter_creation:\n  pools: { characteristic_points: 10 }\n",
+        )
+        .unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL points_available(kind)\nPoints {points_available(\"nope\")}.\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let error = engine.start().unwrap_err();
+        assert!(
+            error.to_string().contains("unknown point kind `nope`"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn levelling_bindings_bank_xp_and_level_up() {
+        let yaml = "characteristics:\n  c: { name: C, min: 1, max: 14 }\ncharacter_creation:\n  pools: { characteristic_points: 0 }\nlevelling:\n  max_level: 3\n  xp_curve:\n    - { level: 2, xp: 100 }\n  rewards:\n    per_level: { characteristic_points: 1 }\n";
+        let data = GameData::from_yaml("title: Test", yaml).unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL xp()\nEXTERNAL add_xp(amount)\nEXTERNAL level()\nEXTERNAL level_up_ready()\nEXTERNAL level_up()\nEXTERNAL points_available(kind)\nVAR up = false\nLevel {level()}, XP {xp()}.\n~ add_xp(120)\nReady {level_up_ready()}.\n~ up = level_up()\nLevel {level()}, bonus {points_available(\"characteristic\")}.\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        let joined = text.join(" ");
+        assert!(joined.contains("Level 1, XP 0."), "{joined}");
+        assert!(joined.contains("Ready true."), "{joined}");
+        assert!(joined.contains("Level 2, bonus 1."), "{joined}");
+
+        let data = GameData::from_yaml(
+            "title: Test",
+            "characteristics:\n  c: { name: C, min: 1, max: 14 }\n",
+        )
+        .unwrap();
+        let mut engine =
+            Engine::new("EXTERNAL add_xp(amount)\n~ add_xp(-5)\n-> END\n", data).unwrap();
+        let error = engine.start().unwrap_err();
+        assert!(
+            error.to_string().contains("xp amount must be nonnegative"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn add_perk_and_add_item_enforce_prerequisites() {
+        let yaml = "characteristics:\n  physique: { name: Physique, min: 1, max: 14 }\nperks:\n  juggernaut: { name: Juggernaut }\nitems:\n  rope: { name: Rope }\nprerequisites:\n  juggernaut:\n    requires: { characteristics: { physique: 6 } }\n  rope:\n    requires: { characteristics: { physique: 6 } }\n";
+        let data = GameData::from_yaml("title: Test", yaml).unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL set_characteristic(id, value)\nEXTERNAL add_perk(id)\nEXTERNAL add_item(id)\nEXTERNAL has_perk(id)\nEXTERNAL has_item(id)\n~ set_characteristic(\"physique\", 8)\n~ add_perk(\"juggernaut\")\n~ add_item(\"rope\")\n{ has_perk(\"juggernaut\"): Strong.|Weak.}\n{ has_item(\"rope\"): Rope.|No rope.}\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let Event::TheEnd { text } = engine.start().unwrap() else {
+            panic!("expected end")
+        };
+        let joined = text.join(" ");
+        assert!(joined.contains("Strong."), "{joined}");
+        assert!(joined.contains("Rope."), "{joined}");
+
+        let data = GameData::from_yaml(
+            "title: Test",
+            "characteristics:\n  physique: { name: Physique, min: 1, max: 14 }\nperks:\n  juggernaut: { name: Juggernaut }\nprerequisites:\n  juggernaut:\n    requires: { characteristics: { physique: 6 } }\n",
+        )
+        .unwrap();
+        let mut engine = Engine::new(
+            "EXTERNAL add_perk(id)\n~ add_perk(\"juggernaut\")\n-> END\n",
+            data,
+        )
+        .unwrap();
+        let error = engine.start().unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("missing prerequisites for `juggernaut`"),
+            "{error}"
+        );
     }
 
     #[test]

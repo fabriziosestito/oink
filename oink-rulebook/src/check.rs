@@ -72,7 +72,8 @@ pub struct PassiveResult {
 
 /// What the story asks for. Tags may be empty, the modifier is the one-off
 /// modifier, and pool optionally names an explicit dice profile. None starts
-/// from the rulebook default and permits state advantage or disadvantage.#[derive(Debug, Clone, Copy)]
+/// from the rulebook default and permits state advantage or disadvantage.
+#[derive(Debug, Clone, Copy)]
 pub struct CheckRequest<'a> {
     pub ability: &'a str,
     pub difficulty: i32,
@@ -392,8 +393,11 @@ impl<'a> Checks<'a> {
     }
 }
 
+/// The tens digit of a value, rounding toward negative infinity so that
+/// negative scores and targets keep a well-defined digit (`tens(-15)` is -2).
+/// Positive values behave like truncating division.
 fn tens(value: i32) -> i32 {
-    value / 10
+    value.div_euclid(10)
 }
 
 fn roll_pool<D: Dice + ?Sized>(dice: &mut D, pool: &crate::model::DicePool) -> DiceRoll {
@@ -819,6 +823,53 @@ starting_character:
             .active(&mut dice, &CheckRequest::new("a", 5).with_pool(Some("n")))
             .unwrap();
         assert_eq!(result.degrees, 0);
+    }
+
+    #[test]
+    fn tens_digits_round_toward_negative_infinity() {
+        assert_eq!(tens(34), 3);
+        assert_eq!(tens(5), 0);
+        assert_eq!(tens(0), 0);
+        assert_eq!(tens(-1), -1);
+        assert_eq!(tens(-15), -2);
+    }
+
+    #[test]
+    fn tens_degrees_work_with_negative_targets() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+abilities:
+  a:
+    name: A
+    characteristic: c
+dice:
+  default: t
+  profiles:
+    t:
+      notation: "2d6"
+      direction: over
+      degrees: tens
+      outcomes:
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+starting_character:
+  characteristics: { c: 1 }
+"#;
+        let rulebook = load(yaml);
+        let character = Character::from_starting(&rulebook);
+        let checks = Checks::new(&rulebook, &character);
+        // score 7 vs target -15: tens 0 - (-2) = 2.
+        let mut dice = ScriptedDice::new(&[3, 4]);
+        let result = checks
+            .active(&mut dice, &CheckRequest::new("a", -15))
+            .unwrap();
+        assert_eq!(result.degrees, 2);
+        assert_eq!(result.outcome, Outcome::Success);
     }
 
     #[test]

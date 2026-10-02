@@ -1,84 +1,155 @@
-// oink demo story
+// Mountain pass: body-or-mind creation, a sheet summary, then trials,
+// a heroic climb, a spell, a level-up milestone and a verdict.
+// Note: multi-branch "- condition:" blocks do not work with bladeink,
+// so outcomes use nested conditionals.
 
-EXTERNAL roll_check(ability, difficulty, tags, modifier)
+EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
 EXTERNAL passive_check(ability, dc, tags, modifier)
-EXTERNAL has_item(item)
-EXTERNAL has_tag(tag)
-EXTERNAL has_perk(perk)
-EXTERNAL add_item(item)
-EXTERNAL add_condition(condition)
+EXTERNAL check_roll()
+EXTERNAL points_available(kind)
+EXTERNAL spend_point(kind, id)
+EXTERNAL apply_preset(id)
+EXTERNAL characteristic(id)
+EXTERNAL ability_level(id)
+EXTERNAL add_perk(id)
+EXTERNAL has_item(id)
+EXTERNAL add_item(id)
+EXTERNAL use_item(id)
+EXTERNAL has_condition(id)
 EXTERNAL enter_environment(id)
 EXTERNAL clear_environment(id)
 EXTERNAL end_scene()
+EXTERNAL resource(id)
+EXTERNAL resource_max(id)
+EXTERNAL level()
+EXTERNAL xp()
+EXTERNAL add_xp(amount)
+EXTERNAL level_up_ready()
+EXTERNAL level_up()
+EXTERNAL cast_spell(id)
 
 VAR outcome = ""
+VAR ready = false
 
-The old bridge creaks under your boots. On the far side, a troll
-sharpens a rusty cleaver, eyeing you with mild professional interest.
-~ enter_environment("dark")
-{ passive_check("empathy", 8, "", 0):
-    Something in the troll's grip is not as steady as it looks.
-}
+Snow on the high pass. A courier run, alone.
++ [Take the veteran preset]
+    ~ apply_preset("veteran")
+    No questions asked. -> sheet
++ [Train yourself]
+    -> spend
 
-*   [Draw the sword and charge]
-    ~ outcome = roll_check("endurance", 10, "", 0)
-    { outcome == "critical_success":
-        One clean blow. The troll looks at its cleaver, then at you, then leaves. -> victory
-    - outcome == "success":
-        Steel rings against steel. The troll is strong, but slow. -> victory
-    - outcome == "critical_failure":
-        The cleaver finds your shoulder before you find your footing. -> death
-    - else:
-        You back off the bridge, bruised but breathing. -> retreat
-    }
-*   [Try to talk]
-    "Nice cleaver," you offer. The troll blinks. Nobody has complimented its cleaver in two hundred years. -> victory
-*   [Search the toll booth]
-    { has_tag("wizard"):
-        You whisper a word, and a small light gathers in your palm. A lantern waits behind the counter. -> lantern
-    - has_perk("night_vision"):
-        Your eyes are enough. A lantern waits behind the counter. -> lantern
-    - else:
-        It is too dark to search. -> waiting
-    }
-
-=== lantern ===
-~ add_item("lantern")
-A brass lantern, still warm from another hand. -> waiting
-
-=== waiting ===
-{ has_item("lantern"):
-    The lantern throws the troll's shadow long across the bridge.
-}
-The troll taps its cleaver against the bridge. It is waiting.
-*   [Try to talk] -> victory
-*   [Draw the sword and charge] -> fight
-
-=== fight ===
-~ outcome = roll_check("endurance", 10, "", 0)
-{ outcome == "success" or outcome == "critical_success":
-    The troll stumbles. You press the opening. -> victory
-- outcome == "critical_failure":
-    The cleaver finds you. -> death
+=== spend ===
+Body or mind? Points: {points_available("characteristic")}.
+{ points_available("characteristic") > 0:
+    * [Build Physique]
+        ~ spend_point("characteristic", "physique")
+        -> spend
+    * [Sharpen Intellect]
+        ~ spend_point("characteristic", "intellect")
+        -> spend
+    * [Sharpen Psyche]
+        ~ spend_point("characteristic", "psyche")
+        -> spend
+    * [Done]
+        -> sheet
 - else:
-    You back off, bruised but breathing. -> retreat
+    -> sheet
 }
 
-=== victory ===
-~ end_scene()
-~ clear_environment("dark")
-~ add_condition("shaken")
-The troll is gone. The road to adventure lies open, and your hands will not stop shaking.
--> END
+=== sheet ===
+INT {characteristic("intellect")} PSY {characteristic("psyche")} PHY {characteristic("physique")} MOT {characteristic("motorics")}.
+Logic {ability_level("logic")} Empathy {ability_level("empathy")} Endurance {ability_level("endurance")}.
+Focus {resource("focus")}/{resource_max("focus")}. Level {level()}, XP {xp()}.
++ [Shoulder the pack]
+    -> pass1
 
-=== retreat ===
-~ end_scene()
-~ clear_environment("dark")
-You walk away, mission unaccomplished.
--> END
+=== pass1 ===
+~ enter_environment("dark")
+The ravine is dark. Loose stones tick above.
+{ passive_check("logic", 5, "", 0):
+    You spot the warning cairn in time.
+}
+* [Climb the rockfall]
+    ~ outcome = roll_check("endurance", 8, "", 0, "standard")
+    Roll {check_roll()}: {outcome}. -> shrine
+* [Light a lantern first]
+    ~ add_item("lantern")
+    { has_item("lantern"):
+        Warm light. -> shrine
+    }
 
-=== death ===
-~ end_scene()
+=== shrine ===
+A wayside shrine, older than the guild.
+~ outcome = roll_check("logic", 8, "", 0, "standard")
+Roll {check_roll()}: {outcome}.
+{ outcome == "success" or outcome == "critical_success":
+    The runes align. -> keeper
+- else:
+    The runes stay silent. -> keeper
+}
+
+=== keeper ===
 ~ clear_environment("dark")
-The last thing you see is the bridge, and the sky above it.
--> END
+The shrine-keeper offers night-sight training, for sharp minds only.
++ { characteristic("intellect") >= 5 } [Accept eagle-eyes training]
+    ~ add_perk("eagle_eyes")
+    -> eyrie
++ [Leave an offering]
+    -> eyrie
+
+=== eyrie ===
+The storm breaks over the ridge. One rope, one chance.
+~ outcome = roll_check("endurance", 12, "", 0, "heroic")
+Roll {check_roll()}: {outcome}.
+{ outcome == "critical_success":
+    You dance up the ice. -> nightcamp
+- else:
+    { outcome == "success":
+        Slow and steady. -> nightcamp
+    - else:
+        { outcome == "critical_failure":
+            The rope sings, then holds. Barely. -> nightcamp
+        - else:
+            You haul yourself up, shaking. -> nightcamp
+        }
+    }
+}
+
+=== nightcamp ===
+~ use_item("cigarette")
+{ has_condition("nicotine_rush"):
+    Steady hands for the spell.
+}
+Focus {resource("focus")}/{resource_max("focus")}, the working costs 2.
+* [Cast light into the dark]
+    ~ outcome = cast_spell("telekinesis")
+    Roll {check_roll()}: {outcome}. -> milestone
+* [Save your strength]
+    -> milestone
+
+=== milestone ===
+~ add_xp(150)
+~ ready = level_up_ready()
+{ ready:
+    Something settles into place. Level {level()}. -> levelup
+- else:
+    -> verdict
+}
+
+=== levelup ===
+* [Keen senses: empathy +1]
+    ~ spend_point("ability", "empathy")
+    -> verdict
+* [Move on]
+    -> verdict
+
+=== verdict ===
+~ end_scene()
+The guild seal waits at the pass head.
+* [Ask for judgment]
+    ~ outcome = roll_check("empathy", 10, "artist", 0, "standard")
+    { outcome == "success" or outcome == "critical_success":
+        "The pass is open," Oka says. -> END
+    - else:
+        "The mountain waits," Oka says. -> END
+    }

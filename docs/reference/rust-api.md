@@ -197,7 +197,7 @@ in-memory character and return notices.
 | `has_tag(&rulebook, tag)` / `effective_tags(&rulebook)` | Read the combined character tags |
 | `characteristic(id)` / `resource(id)` | Return `Option<i32>` |
 | `ability_level(id)` | Returns the level, or 0 if absent |
-| `resource_max(&rulebook, id)` | Returns the configured maximum |
+| `resource_max(&rulebook, id)` | Returns the effective maximum, derived when `max_from` is set |
 | `perk_ids`, `item_ids`, `condition_ids`, `environment_ids`, `ability_ids`, `tag_ids` | Iterate stored IDs |
 | `add_item`, `add_perk`, `add_condition`, `enter_environment`, `add_tag` | Take `&rulebook` and an ID; return `Vec<StateChange>` |
 | `remove_item`, `remove_perk`, `remove_condition`, `clear_environment`, `remove_tag` | Take an ID; return `Vec<StateChange>` |
@@ -206,6 +206,18 @@ in-memory character and return notices.
 | `can_spend_resource(&rulebook, id, amount)` | Tests whether a full nonnegative payment fits |
 | `spend_resource` / `restore_resource` | Take `&rulebook`, ID, and amount; return notices |
 | `on_scene_end()` | Decrements durations and returns expiry notices |
+| `begin_creation(&rulebook)` | Builds a fresh sheet from the creation base |
+| `reset_character(&rulebook)` | Rebuilds the sheet from the creation base |
+| `points_available(&rulebook, kind)` | Returns unspent pool points as `u32` |
+| `spend_point(&rulebook, kind, id)` | Spends the flat cost and applies one pick; false without changes |
+| `apply_preset(&rulebook, id)` | Applies a preset, refreshes derived maxima, marks pools spent |
+| `set_characteristic` / `set_ability` | Write values directly without spending; false for unknown IDs |
+| `validate_creation(&rulebook)` | Returns unspent-pool messages; empty means complete |
+| `meets_prerequisite(&rulebook, id)` | True when every requirement holds; ids without an entry pass |
+| `xp()` / `level()` | Return banked experience and current level |
+| `add_xp(amount)` | Banks experience without levelling |
+| `level_up_ready(&rulebook)` | True when banked XP reaches the next curve level below the cap |
+| `level_up(&mut self, rulebook)` | Rises one level with rewards; false when not ready |
 
 The Rust mutators currently accept unknown item, perk, condition, tag, and
 environment IDs. Callers must validate them. The Ink bindings validate additions

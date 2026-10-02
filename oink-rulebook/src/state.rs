@@ -1,6 +1,6 @@
 //! Mutable character state and change events.
 
-use crate::model::Rulebook;
+use crate::model::{CreationPools, Rulebook};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -55,6 +55,45 @@ pub struct Character {
     tags: BTreeSet<String>,
     environments: BTreeSet<String>,
     resources: BTreeMap<String, i32>,
+    creation_spent: CreationSpent,
+    level: u32,
+    xp: u32,
+    level_bonus: CreationPools,
+}
+
+/// Which creation pool a point comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreationPointKind {
+    Characteristic,
+    Ability,
+    Perk,
+}
+
+impl CreationPointKind {
+    pub fn parse(kind: &str) -> Option<Self> {
+        match kind {
+            "characteristic" => Some(Self::Characteristic),
+            "ability" => Some(Self::Ability),
+            "perk" => Some(Self::Perk),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Characteristic => "characteristic",
+            Self::Ability => "ability",
+            Self::Perk => "perk",
+        }
+    }
+}
+
+/// Points spent from each creation pool.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CreationSpent {
+    pub characteristics: u32,
+    pub abilities: u32,
+    pub perks: u32,
 }
 
 impl Character {
@@ -62,7 +101,10 @@ impl Character {
     /// until the sheet stops changing.
     pub fn from_starting(rulebook: &Rulebook) -> Self {
         let starting = &rulebook.starting_character;
-        let mut character = Self::default();
+        let mut character = Self {
+            level: 1,
+            ..Default::default()
+        };
 
         for (id, definition) in &rulebook.characteristics {
             let value = starting
@@ -87,18 +129,20 @@ impl Character {
         character.inventory = starting.inventory.iter().cloned().collect();
 
         for (id, definition) in &rulebook.resources {
+            let max = definition.derived_max(&character.characteristics);
+            let ceiling = max.max(definition.min);
             let value = starting
                 .resources
                 .get(id)
                 .copied()
                 .unwrap_or(if definition.start_full {
-                    definition.max
+                    max
                 } else {
                     definition.min
                 });
             character
                 .resources
-                .insert(id.clone(), value.clamp(definition.min, definition.max));
+                .insert(id.clone(), value.clamp(definition.min, ceiling));
         }
 
         character.apply_grants(rulebook);
@@ -142,7 +186,10 @@ impl Character {
     }
 
     pub fn resource_max(&self, rulebook: &Rulebook, id: &str) -> Option<i32> {
-        rulebook.resources.get(id).map(|definition| definition.max)
+        rulebook
+            .resources
+            .get(id)
+            .map(|definition| definition.derived_max(&self.characteristics))
     }
 
     pub fn perk_ids(&self) -> impl Iterator<Item = &String> {
@@ -332,6 +379,362 @@ impl Character {
         }
     }
 
+    /// Build a fresh sheet for character creation from the creation base.
+    /// Characteristics and abilities come from the base, falling back to
+    /// definition defaults. Everything else starts empty, resources start
+    /// full, and spent counters start at zero.
+    pub fn begin_creation(rulebook: &Rulebook) -> Self {
+        let mut character = Self {
+            level: 1,
+            ..Default::default()
+        };
+        let base = rulebook.creation.as_ref().map(|creation| &creation.base);
+
+        for (id, definition) in &rulebook.characteristics {
+            let value = base
+                .and_then(|base| base.characteristics.get(id).copied())
+                .or(definition.default)
+                .unwrap_or(definition.min);
+            character
+                .characteristics
+                .insert(id.clone(), value.clamp(definition.min, definition.max));
+        }
+
+        if let Some(base) = base {
+            for (id, level) in &base.abilities {
+                if rulebook.abilities.contains_key(id) {
+                    character.abilities.insert(id.clone(), *level);
+                }
+            }
+        }
+
+        for (id, definition) in &rulebook.resources {
+            let max = definition.derived_max(&character.characteristics);
+            let ceiling = max.max(definition.min);
+            let value = if definition.start_full {
+                max
+            } else {
+                definition.min
+            };
+            character
+                .resources
+                .insert(id.clone(), value.clamp(definition.min, ceiling));
+        }
+
+        character
+    }
+
+    /// Start creation over: rebuild the sheet from the creation base.
+    pub fn reset_character(&mut self, rulebook: &Rulebook) {
+        *self = Self::begin_creation(rulebook);
+    }
+
+    /// Points left in a creation pool, including level rewards. Zero
+    /// without a creation section.
+    pub fn points_available(&self, rulebook: &Rulebook, kind: CreationPointKind) -> u32 {
+        let Some(creation) = rulebook.creation.as_ref() else {
+            return 0;
+        };
+        let (pool, bonus, spent) = match kind {
+            CreationPointKind::Characteristic => (
+                creation.pools.characteristic_points,
+                self.level_bonus.characteristic_points,
+                self.creation_spent.characteristics,
+            ),
+            CreationPointKind::Ability => (
+                creation.pools.ability_points,
+                self.level_bonus.ability_points,
+                self.creation_spent.abilities,
+            ),
+            CreationPointKind::Perk => (
+                creation.pools.perk_points,
+                self.level_bonus.perk_points,
+                self.creation_spent.perks,
+            ),
+        };
+        pool.saturating_add(bonus).saturating_sub(spent)
+    }
+
+    /// True when every requirement for an id holds. Ids without an entry
+    /// always pass. Characteristic thresholds read stored values, abilities
+    /// read owned levels (0 when absent), resources read current balances.
+    pub fn meets_prerequisite(&self, rulebook: &Rulebook, id: &str) -> bool {
+        let Some(entry) = rulebook.prerequisites.get(id) else {
+            return true;
+        };
+        entry
+            .requires
+            .characteristics
+            .iter()
+            .all(|(id, need)| self.characteristics.get(id).copied().unwrap_or(0) >= *need)
+            && entry
+                .requires
+                .abilities
+                .iter()
+                .all(|(id, need)| self.ability_level(id) >= *need)
+            && entry
+                .requires
+                .resources
+                .iter()
+                .all(|(id, need)| self.resource(id).unwrap_or(0) >= *need)
+    }
+
+    /// Spend pool points and apply one pick. Characteristics and abilities
+    /// rise by one for the flat cost, perks are granted for one point.
+    /// Returns false without changing anything when points run out or the
+    /// target is invalid. Grant side effects still apply on success.
+    pub fn spend_point(&mut self, rulebook: &Rulebook, kind: CreationPointKind, id: &str) -> bool {
+        let Some(creation) = rulebook.creation.as_ref() else {
+            return false;
+        };
+        if !self.meets_prerequisite(rulebook, id) {
+            return false;
+        }
+        match kind {
+            CreationPointKind::Characteristic => {
+                let Some(definition) = rulebook.characteristics.get(id) else {
+                    return false;
+                };
+                let cost = creation.costs.characteristics;
+                if self.points_available(rulebook, kind) < cost {
+                    return false;
+                }
+                let value = self
+                    .characteristics
+                    .get(id)
+                    .copied()
+                    .unwrap_or(definition.min);
+                if value >= definition.max {
+                    return false;
+                }
+                self.characteristics
+                    .insert(id.to_string(), (value + 1).min(definition.max));
+                self.creation_spent.characteristics =
+                    self.creation_spent.characteristics.saturating_add(cost);
+                true
+            }
+            CreationPointKind::Ability => {
+                if !rulebook.abilities.contains_key(id) {
+                    return false;
+                }
+                let cost = creation.costs.abilities;
+                if self.points_available(rulebook, kind) < cost {
+                    return false;
+                }
+                let level = self.abilities.get(id).copied().unwrap_or(0);
+                self.abilities.insert(id.to_string(), level + 1);
+                self.creation_spent.abilities = self.creation_spent.abilities.saturating_add(cost);
+                true
+            }
+            CreationPointKind::Perk => {
+                if !rulebook.perks.contains_key(id) || self.perks.contains(id) {
+                    return false;
+                }
+                if self.points_available(rulebook, kind) < 1 {
+                    return false;
+                }
+                self.add_perk(rulebook, id);
+                self.creation_spent.perks = self.creation_spent.perks.saturating_add(1);
+                true
+            }
+        }
+    }
+
+    /// Apply a preset as the complete sheet: reset to the creation base,
+    /// overlay preset values, add qualifying perks and tags, refresh derived
+    /// resource maxima, and mark every pool spent. Preset perks whose
+    /// prerequisites the preset sheet does not meet are skipped. Returns
+    /// false for unknown presets or without a creation section.
+    pub fn apply_preset(&mut self, rulebook: &Rulebook, id: &str) -> bool {
+        let Some(creation) = rulebook.creation.as_ref() else {
+            return false;
+        };
+        let Some(preset) = creation.presets.get(id).cloned() else {
+            return false;
+        };
+        *self = Self::begin_creation(rulebook);
+        for (id, value) in &preset.characteristics {
+            if let Some(definition) = rulebook.characteristics.get(id) {
+                self.characteristics
+                    .insert(id.clone(), (*value).clamp(definition.min, definition.max));
+            }
+        }
+        for (id, level) in &preset.abilities {
+            if rulebook.abilities.contains_key(id) {
+                self.abilities.insert(id.clone(), *level);
+            }
+        }
+        for id in &preset.perks {
+            if rulebook.perks.contains_key(id) && self.meets_prerequisite(rulebook, id) {
+                self.add_perk(rulebook, id);
+            }
+        }
+        for tag in &preset.tags {
+            self.add_tag(rulebook, tag);
+        }
+        for (id, definition) in &rulebook.resources {
+            let max = definition.derived_max(&self.characteristics);
+            let ceiling = max.max(definition.min);
+            let value = self.resources.get(id).copied().unwrap_or(definition.min);
+            self.resources
+                .insert(id.clone(), value.clamp(definition.min, ceiling));
+        }
+        let pools = &rulebook
+            .creation
+            .as_ref()
+            .expect("creation section checked above")
+            .pools;
+        self.creation_spent.characteristics = pools
+            .characteristic_points
+            .saturating_add(self.level_bonus.characteristic_points);
+        self.creation_spent.abilities = pools
+            .ability_points
+            .saturating_add(self.level_bonus.ability_points);
+        self.creation_spent.perks = pools
+            .perk_points
+            .saturating_add(self.level_bonus.perk_points);
+        true
+    }
+
+    /// Set a stored characteristic directly, clamped to its bounds, without
+    /// spending points. Returns false for unknown characteristics.
+    pub fn set_characteristic(&mut self, rulebook: &Rulebook, id: &str, value: i32) -> bool {
+        let Some(definition) = rulebook.characteristics.get(id) else {
+            return false;
+        };
+        self.characteristics
+            .insert(id.to_string(), value.clamp(definition.min, definition.max));
+        true
+    }
+
+    /// Set an ability level directly, floored at zero, without spending
+    /// points. Returns false for unknown abilities.
+    pub fn set_ability(&mut self, rulebook: &Rulebook, id: &str, level: i32) -> bool {
+        if !rulebook.abilities.contains_key(id) {
+            return false;
+        }
+        self.abilities.insert(id.to_string(), level.max(0));
+        true
+    }
+
+    /// Check every pool, including level rewards, against its spent points.
+    /// Empty means creation is complete under `validate: all_points_spent`.
+    /// Stories gate on `points_available`; this is the Rust-side equivalent.
+    pub fn validate_creation(&self, rulebook: &Rulebook) -> Vec<String> {
+        let mut problems = Vec::new();
+        let Some(creation) = rulebook.creation.as_ref() else {
+            return problems;
+        };
+        for (kind, pool, spent) in [
+            (
+                CreationPointKind::Characteristic,
+                creation
+                    .pools
+                    .characteristic_points
+                    .saturating_add(self.level_bonus.characteristic_points),
+                self.creation_spent.characteristics,
+            ),
+            (
+                CreationPointKind::Ability,
+                creation
+                    .pools
+                    .ability_points
+                    .saturating_add(self.level_bonus.ability_points),
+                self.creation_spent.abilities,
+            ),
+            (
+                CreationPointKind::Perk,
+                creation
+                    .pools
+                    .perk_points
+                    .saturating_add(self.level_bonus.perk_points),
+                self.creation_spent.perks,
+            ),
+        ] {
+            if spent < pool {
+                problems.push(format!(
+                    "{}: {}/{} points spent",
+                    kind.as_str(),
+                    spent,
+                    pool
+                ));
+            }
+        }
+        problems
+    }
+
+    /// Current level. Sheets start at 1.
+    pub fn level(&self) -> u32 {
+        self.level
+    }
+
+    /// Banked experience. Grows only through `add_xp`.
+    pub fn xp(&self) -> u32 {
+        self.xp
+    }
+
+    /// Bank experience without levelling. Level-ups happen one at a time
+    /// through `level_up`, so stories control when the sheet changes.
+    pub fn add_xp(&mut self, amount: u32) {
+        self.xp = self.xp.saturating_add(amount);
+    }
+
+    /// True when banked XP reaches a higher curve level below the cap.
+    pub fn level_up_ready(&self, rulebook: &Rulebook) -> bool {
+        let Some((_, need)) = Self::next_threshold(rulebook, self.level) else {
+            return false;
+        };
+        self.xp >= need
+    }
+
+    /// Rise one level when ready, granting per-level rewards plus the
+    /// interval perk points when the new level hits the interval.
+    /// Returns false without changing anything otherwise.
+    pub fn level_up(&mut self, rulebook: &Rulebook) -> bool {
+        let Some(levelling) = rulebook.levelling.as_ref() else {
+            return false;
+        };
+        if self.level >= levelling.max_level {
+            return false;
+        }
+        if !self.level_up_ready(rulebook) {
+            return false;
+        }
+        self.level += 1;
+        let rewards = &levelling.rewards;
+        self.level_bonus.characteristic_points = self
+            .level_bonus
+            .characteristic_points
+            .saturating_add(rewards.per_level.characteristic_points);
+        self.level_bonus.ability_points = self
+            .level_bonus
+            .ability_points
+            .saturating_add(rewards.per_level.ability_points);
+        if let Some(interval) = &rewards.interval {
+            if interval.every > 0 && self.level.is_multiple_of(interval.every) {
+                self.level_bonus.perk_points = self
+                    .level_bonus
+                    .perk_points
+                    .saturating_add(interval.perk_points);
+            }
+        }
+        true
+    }
+
+    /// The next curve entry above a level as `(level, xp)`, if any.
+    fn next_threshold(rulebook: &Rulebook, level: u32) -> Option<(u32, u32)> {
+        let levelling = rulebook.levelling.as_ref()?;
+        if level >= levelling.max_level {
+            return None;
+        }
+        levelling
+            .xp_curve
+            .iter()
+            .filter(|entry| entry.level > level)
+            .min_by_key(|entry| entry.level)
+            .map(|entry| (entry.level, entry.xp))
+    }
+
     pub fn spend_resource(
         &mut self,
         rulebook: &Rulebook,
@@ -394,8 +797,10 @@ impl Character {
         let Some(current) = self.resources.get(id).copied() else {
             return Vec::new();
         };
-        let next = (i64::from(current) + i64::from(delta))
-            .clamp(i64::from(definition.min), i64::from(definition.max)) as i32;
+        let ceiling =
+            i64::from(definition.derived_max(&self.characteristics)).max(i64::from(definition.min));
+        let next = (i64::from(current) + i64::from(delta)).clamp(i64::from(definition.min), ceiling)
+            as i32;
         if next == current {
             return Vec::new();
         }

@@ -54,6 +54,12 @@ impl Rulebook {
         for characteristic in self.characteristics.values_mut() {
             characteristic.bonus.sort_thresholds();
         }
+        for resource in self.resources.values_mut() {
+            resource.sort_thresholds();
+        }
+        if let Some(levelling) = self.levelling.as_mut() {
+            levelling.xp_curve.sort_by_key(|entry| entry.level);
+        }
     }
 
     fn parse_dice(&mut self, errors: &mut Vec<String>) {
@@ -236,11 +242,75 @@ impl Rulebook {
         }
 
         for (id, resource) in &self.resources {
-            if resource.min > resource.max {
+            if resource.max_from.is_empty() && resource.min > resource.max {
                 errors.push(format!(
                     "resource `{id}`: min {} is greater than max {}",
                     resource.min, resource.max
                 ));
+            }
+            for entry in &resource.max_from {
+                if !self.characteristics.contains_key(&entry.characteristic) {
+                    errors.push(format!(
+                        "resource `{id}` derives from unknown characteristic `{}`",
+                        entry.characteristic
+                    ));
+                }
+            }
+        }
+
+        for (id, prerequisite) in &self.prerequisites {
+            if !self.perks.contains_key(id)
+                && !self.abilities.contains_key(id)
+                && !self.items.contains_key(id)
+                && !self.spells.contains_key(id)
+            {
+                errors.push(format!(
+                    "prerequisite `{id}` gates unknown perk, ability, item, or spell"
+                ));
+            }
+            for requires in prerequisite.requires.characteristics.keys() {
+                if !self.characteristics.contains_key(requires) {
+                    errors.push(format!(
+                        "prerequisite `{id}` requires unknown characteristic `{requires}`"
+                    ));
+                }
+            }
+            for requires in prerequisite.requires.abilities.keys() {
+                if !self.abilities.contains_key(requires) {
+                    errors.push(format!(
+                        "prerequisite `{id}` requires unknown ability `{requires}`"
+                    ));
+                }
+            }
+            for requires in prerequisite.requires.resources.keys() {
+                if !self.resources.contains_key(requires) {
+                    errors.push(format!(
+                        "prerequisite `{id}` requires unknown resource `{requires}`"
+                    ));
+                }
+            }
+        }
+
+        if let Some(levelling) = &self.levelling {
+            let mut seen = std::collections::BTreeSet::new();
+            for entry in &levelling.xp_curve {
+                if entry.level < 2 || entry.level > levelling.max_level {
+                    errors.push(format!(
+                        "levelling curve level {} is outside 2..={}",
+                        entry.level, levelling.max_level
+                    ));
+                }
+                if !seen.insert(entry.level) {
+                    errors.push(format!(
+                        "levelling curve level {} appears twice",
+                        entry.level
+                    ));
+                }
+            }
+            if let Some(interval) = &levelling.rewards.interval {
+                if interval.every == 0 {
+                    errors.push("levelling interval every must be positive".to_string());
+                }
             }
         }
 
@@ -301,6 +371,53 @@ impl Rulebook {
         for id in starting.resources.keys() {
             if !self.resources.contains_key(id) {
                 errors.push(format!("starting character has unknown resource `{id}`"));
+            }
+        }
+
+        if let Some(creation) = &self.creation {
+            for id in creation.base.characteristics.keys() {
+                if !self.characteristics.contains_key(id) {
+                    errors.push(format!(
+                        "character creation base has unknown characteristic `{id}`"
+                    ));
+                }
+            }
+            for id in creation.base.abilities.keys() {
+                if !self.abilities.contains_key(id) {
+                    errors.push(format!(
+                        "character creation base has unknown ability `{id}`"
+                    ));
+                }
+            }
+            for (preset, definition) in &creation.presets {
+                for id in definition.characteristics.keys() {
+                    if !self.characteristics.contains_key(id) {
+                        errors.push(format!(
+                            "character creation preset `{preset}` has unknown characteristic `{id}`"
+                        ));
+                    }
+                }
+                for id in definition.abilities.keys() {
+                    if !self.abilities.contains_key(id) {
+                        errors.push(format!(
+                            "character creation preset `{preset}` has unknown ability `{id}`"
+                        ));
+                    }
+                }
+                for id in &definition.perks {
+                    if !self.perks.contains_key(id) {
+                        errors.push(format!(
+                            "character creation preset `{preset}` has unknown perk `{id}`"
+                        ));
+                    }
+                }
+                for tag in &definition.tags {
+                    self.warn_tag(
+                        &mut warnings,
+                        tag,
+                        &format!("character creation preset `{preset}`"),
+                    );
+                }
             }
         }
 

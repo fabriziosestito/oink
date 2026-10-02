@@ -214,9 +214,79 @@ pub struct Resource {
     pub name: String,
     #[serde(default)]
     pub min: i32,
+    #[serde(default)]
     pub max: i32,
     #[serde(default = "default_true")]
     pub start_full: bool,
+    #[serde(default)]
+    pub max_from: Vec<MaxFromEntry>,
+}
+
+impl Resource {
+    /// The effective maximum: the plain `max` when no derivation is
+    /// configured, otherwise the sum of every `max_from` entry. Derivation
+    /// reads stored characteristic values only, so temporary conditions
+    /// never move resource maxima.
+    pub fn derived_max(&self, characteristics: &BTreeMap<String, i32>) -> i32 {
+        if self.max_from.is_empty() {
+            return self.max;
+        }
+        let mut total: i64 = 0;
+        for entry in &self.max_from {
+            let value = characteristics
+                .get(&entry.characteristic)
+                .copied()
+                .unwrap_or(0);
+            let part: i64 = match entry.mode {
+                MaxFromMode::Thresholds => entry
+                    .thresholds
+                    .iter()
+                    .find(|threshold| value >= threshold.at)
+                    .or_else(|| entry.thresholds.last())
+                    .map(|threshold| i64::from(threshold.value))
+                    .unwrap_or(0),
+                MaxFromMode::PerPoint => {
+                    i64::from(entry.base) + i64::from(entry.value_per_point) * i64::from(value)
+                }
+            };
+            total = total.saturating_add(part);
+        }
+        total.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+    }
+
+    pub fn sort_thresholds(&mut self) {
+        for entry in &mut self.max_from {
+            entry
+                .thresholds
+                .sort_by_key(|threshold| std::cmp::Reverse(threshold.at));
+        }
+    }
+}
+
+/// One characteristic contribution to a derived resource maximum.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct MaxFromEntry {
+    pub characteristic: String,
+    pub mode: MaxFromMode,
+    #[serde(default)]
+    pub thresholds: Vec<MaxFromThreshold>,
+    #[serde(default)]
+    pub base: i32,
+    #[serde(default)]
+    pub value_per_point: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaxFromMode {
+    Thresholds,
+    PerPoint,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct MaxFromThreshold {
+    pub at: i32,
+    pub value: i32,
 }
 
 fn default_true() -> bool {
@@ -499,6 +569,151 @@ impl Default for DiceConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CreationMode {
+    #[default]
+    Pool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CreationValidation {
+    #[default]
+    AllPointsSpent,
+}
+
+/// Free placement applied before creation points are spent.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct CreationBase {
+    pub characteristics: BTreeMap<String, i32>,
+    pub abilities: BTreeMap<String, i32>,
+}
+
+/// Points to spend on top of the base.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct CreationPools {
+    pub characteristic_points: u32,
+    pub ability_points: u32,
+    pub perk_points: u32,
+}
+
+fn default_point_cost() -> u32 {
+    1
+}
+
+/// Flat point costs (see Q1: flat for v1, rising costs stay an open question).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CreationCosts {
+    #[serde(default = "default_point_cost")]
+    pub characteristics: u32,
+    #[serde(default = "default_point_cost")]
+    pub abilities: u32,
+}
+
+impl Default for CreationCosts {
+    fn default() -> Self {
+        Self {
+            characteristics: 1,
+            abilities: 1,
+        }
+    }
+}
+
+/// A named starting sheet. The story can apply it and skip point spending.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CreationPreset {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub characteristics: BTreeMap<String, i32>,
+    #[serde(default)]
+    pub abilities: BTreeMap<String, i32>,
+    #[serde(default)]
+    pub perks: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// Data-driven character creation. Absent means stories use
+/// `starting_character` directly and creation functions stay unused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CharacterCreation {
+    #[serde(default)]
+    pub mode: CreationMode,
+    #[serde(default)]
+    pub base: CreationBase,
+    #[serde(default)]
+    pub pools: CreationPools,
+    #[serde(default)]
+    pub costs: CreationCosts,
+    #[serde(default)]
+    pub validate: CreationValidation,
+    #[serde(default)]
+    pub presets: BTreeMap<String, CreationPreset>,
+}
+
+/// Minimum values gating one perk, ability, item, or spell by id.
+/// Characteristics read stored values, abilities read owned levels
+/// (0 when absent), resources read current balances.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Requirement {
+    pub characteristics: BTreeMap<String, i32>,
+    pub abilities: BTreeMap<String, i32>,
+    pub resources: BTreeMap<String, i32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Prerequisite {
+    pub requires: Requirement,
+}
+
+/// XP needed to reach one level.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LevelThreshold {
+    pub level: u32,
+    pub xp: u32,
+}
+
+/// Points granted at every level.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct LevelPoints {
+    pub characteristic_points: u32,
+    pub ability_points: u32,
+}
+
+/// Extra points granted every N levels. Absent means no interval rewards.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LevelInterval {
+    pub every: u32,
+    pub perk_points: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct LevelRewards {
+    pub per_level: LevelPoints,
+    #[serde(default)]
+    pub interval: Option<LevelInterval>,
+}
+
+/// XP curve, level cap, and rewards. Absent means no levelling: XP banks
+/// without effect and level checks stay false.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Levelling {
+    pub max_level: u32,
+    #[serde(default)]
+    pub xp_curve: Vec<LevelThreshold>,
+    #[serde(default)]
+    pub rewards: LevelRewards,
+}
+
 /// The full rulebook: every resource definition plus the starting character.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -516,4 +731,10 @@ pub struct Rulebook {
     pub spells: BTreeMap<String, Spell>,
     pub dice: DiceConfig,
     pub starting_character: StartingCharacter,
+    #[serde(default, rename = "character_creation")]
+    pub creation: Option<CharacterCreation>,
+    #[serde(default)]
+    pub levelling: Option<Levelling>,
+    #[serde(default)]
+    pub prerequisites: BTreeMap<String, Prerequisite>,
 }

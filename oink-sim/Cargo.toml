@@ -9,7 +9,7 @@ name = "oink-sim"
 path = "src/main.rs"
 
 [dependencies]
-oink-core = { path = "../oink-core" }
+oink-core = { path = "../oink-core", features = ["spells"] }
 embedded-graphics.workspace = true
 embedded-graphics-simulator = "0.8"
 [target.'cfg(target_os = "macos")'.dependencies]

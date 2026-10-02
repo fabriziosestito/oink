@@ -138,6 +138,27 @@ Omit `duration` to keep a condition until the story removes it.
 Adding an existing condition resets its duration without stacking its modifiers.
 A duration of 0 expires at the next `end_scene()` call.
 
+## Prerequisites
+
+The optional `prerequisites` map gates perks, abilities, items, and spells by
+id behind minimum values. Characteristics read stored values, abilities read
+owned levels with absent meaning 0, resources read current balances.
+
+```yaml
+prerequisites:
+  juggernaut:
+    requires:
+      characteristics: { physique: 6 }
+  telekinesis:
+    requires:
+      abilities: { arcana: 2 }
+      resources: { focus: 2 }
+```
+
+Ink `add_perk` and `add_item` refuse gated ids with an error. Creation
+`spend_point` returns false and presets skip gated perks. Spell casting does
+not enforce prerequisites yet.
+
 ## Environments
 
 Environments accept `name`, `description`, `tags`, and `modifiers`.
@@ -208,19 +229,36 @@ the sheet stops changing.
 
 ## Resources
 
-Resources require `name` and integer `max`. They accept integer `min`
-(default 0) and boolean `start_full` (default true).
-`starting_character.resources` overrides the initial value.
+Resources require `name` and either integer `max` or a `max_from` derivation
+list. They accept integer `min` (default 0) and boolean `start_full`
+(default true). `starting_character.resources` overrides the initial value.
 
 ```yaml
 resources:
-  health: { name: Health, min: 0, max: 3 }
+  health:
+    name: Health
+    min: 0
+    max_from:
+      - characteristic: physique
+        mode: thresholds
+        thresholds:
+          - { at: 1, value: 10 }
+          - { at: 11, value: 40 }
+      - characteristic: psyche
+        mode: per_point
+        base: 0
+        value_per_point: 2
   focus: { name: Focus, min: 0, max: 5, start_full: false }
 ```
 
+A `thresholds` entry reads the highest `at` the characteristic reaches, like a
+bonus table. A `per_point` entry computes `base + value_per_point *
+characteristic`. Entries sum together, and derivation reads stored
+characteristic values, so temporary conditions never move resource maxima.
+Character creation pools are not implemented yet.
+
 Starting values are clamped to the bounds. Payments are all-or-nothing above
-the minimum. Restoration stops at the maximum. Derived resource maxima and
-character creation pools are not implemented yet.
+the minimum. Restoration stops at the maximum.
 
 ## Spells
 
@@ -236,6 +274,66 @@ spells:
     cost: { resource: focus, amount: 2 }
     check: { difficulty: medium, tags: [physical] }
 ```
+
+## Character creation
+
+The optional `character_creation` section describes point-buy creation. When
+absent, stories use `starting_character` directly. Creation runs only when the
+story calls its functions, so a story can also apply a preset silently and
+skip spending entirely.
+
+```yaml
+character_creation:
+  mode: pool
+  base:
+    characteristics: { intellect: 2, physique: 2 }
+    abilities: { logic: 0 }
+  pools:
+    characteristic_points: 10
+    ability_points: 5
+    perk_points: 1
+  costs:
+    characteristics: 1
+    abilities: 1
+  validate: all_points_spent
+  presets:
+    bruiser:
+      name: Bruiser
+      characteristics: { physique: 8 }
+      abilities: { endurance: 3 }
+      perks: [juggernaut]
+      tags: [strong]
+```
+
+Costs are flat points per pick and default to 1. The loader rejects preset and
+base entries that reference unknown characteristics, abilities, or perks.
+
+## Levelling
+
+The optional `levelling` section sets the XP curve, the level cap, and the
+rewards. Sheets start at level 1 with 0 XP. Experience comes only from the
+story through `add_xp`; checks never grant XP.
+
+```yaml
+levelling:
+  max_level: 10
+  xp_curve:
+    - { level: 2, xp: 100 }
+    - { level: 3, xp: 250 }
+  rewards:
+    per_level:
+      characteristic_points: 1
+      ability_points: 2
+    interval:
+      every: 3
+      perk_points: 1
+```
+
+Each entry names the XP needed to reach that level. `level_up()` rises one
+level when banked XP reaches the next curve entry, granting the per-level
+points plus the interval perk points when the new level hits the interval.
+Curve levels must sit within 2 and the cap with no duplicates, and the
+interval must be positive when present.
 
 Definitions load in all builds. Casting requires the `spells` feature.
 See the [Ink API](ink-api.md#spells) for cost and failure behavior.
@@ -282,7 +380,9 @@ d12,
 d20, and d%. Use keep notation
 for advantage pools, such as `2d20kh1` and `2d20kl1`. `d100` and `1d100`
 are aliases for `d%`. A plain `2d10` stays a sum. When the section is absent,
-the loader inserts the 2d6 standard profile above.
+the loader inserts the 2d6 standard profile above. That profile keeps the old
+double-based criticals and adds margin-based ones: margin 5 or more is a
+critical success, margin -5 or less is a critical failure.
 
 ## Starting character
 
@@ -308,7 +408,10 @@ resources, and outcome row pairs, invalid characteristic
 defaults, unknown ability parents, unknown grant targets, unknown starting IDs,
 bad dice notation, unknown die sizes, unknown dice defaults, and unknown
 advantage pools. It also rejects unknown conditions applied by items and
-invalid spell references or negative spell costs.
+invalid spell references or negative spell costs. Prerequisite entries must
+gate a known perk, ability, item, or spell and reference known characteristics,
+abilities, and resources. Levelling curve levels must sit within 2 and the cap
+with no duplicates, and a present interval must be positive.
 
 Unknown tags used by abilities, grants, environments, spell checks, or tag
 modifiers produce warnings. Descriptive item tags need no registry entry.
