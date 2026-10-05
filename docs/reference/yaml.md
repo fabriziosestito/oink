@@ -308,9 +308,11 @@ character_creation:
       tags: [strong]
 ```
 
-Costs are flat points per pick, default to 1, and must be positive: a zero
-cost would grant unlimited picks without ever completing validation. The
-loader rejects preset and
+Costs are flat points per pick, default to 1, and must be positive. A zero
+cost grants unlimited picks without completing validation. Each point pool
+must hold a multiple of its cost. A remainder leaves points that
+`spend_point` cannot spend. Then `validate: all_points_spent` never passes.
+The loader rejects pools with a remainder. The loader rejects preset and
 base entries that reference unknown characteristics, abilities, or perks.
 
 ## Levelling

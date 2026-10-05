@@ -379,9 +379,20 @@ impl Rulebook {
                 errors.push(
                     "character creation cost for characteristics must be positive".to_string(),
                 );
+            } else if creation.pools.characteristic_points % creation.costs.characteristics != 0
+            {
+                errors.push(format!(
+                    "character creation characteristic_points {} must be a multiple of cost {}",
+                    creation.pools.characteristic_points, creation.costs.characteristics
+                ));
             }
             if creation.costs.abilities == 0 {
                 errors.push("character creation cost for abilities must be positive".to_string());
+            } else if creation.pools.ability_points % creation.costs.abilities != 0 {
+                errors.push(format!(
+                    "character creation ability_points {} must be a multiple of cost {}",
+                    creation.pools.ability_points, creation.costs.abilities
+                ));
             }
             for id in creation.base.characteristics.keys() {
                 if !self.characteristics.contains_key(id) {
