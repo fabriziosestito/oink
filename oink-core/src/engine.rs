@@ -325,10 +325,11 @@ mod tests {
         let mut engine = demo_engine();
         engine.start().unwrap();
 
-        // Spend path keeps the starting inventory: skip all spending,
-        // take the lantern branch, move on, then smoke.
+        // Spend path keeps the starting inventory: exhaust every pool with
+        // the first option each time, take the lantern branch, move on,
+        // then smoke.
         let mut event = None;
-        for pick in [1, 3, 0, 1, 0, 1, 0, 0] {
+        for pick in [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0] {
             event = Some(engine.choose(pick).unwrap());
         }
         assert!(matches!(event, Some(Event::TheEnd { .. })));

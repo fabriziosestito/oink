@@ -305,7 +305,9 @@ character_creation:
       tags: [strong]
 ```
 
-Costs are flat points per pick and default to 1. The loader rejects preset and
+Costs are flat points per pick, default to 1, and must be positive: a zero
+cost would grant unlimited picks without ever completing validation. The
+loader rejects preset and
 base entries that reference unknown characteristics, abilities, or perks.
 
 ## Levelling

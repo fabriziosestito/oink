@@ -50,8 +50,29 @@ Body or mind? Points: {points_available("characteristic")}.
     * [Sharpen Psyche]
         ~ spend_point("characteristic", "psyche")
         -> spend
-    * [Done]
-        -> sheet
+- else:
+    -> spend_ability
+}
+
+=== spend_ability ===
+Hands to train? Skill points: {points_available("ability")}.
+{ points_available("ability") > 0:
+    * [Drill Logic]
+        ~ spend_point("ability", "logic")
+        -> spend_ability
+    * [Drill Endurance]
+        ~ spend_point("ability", "endurance")
+        -> spend_ability
+- else:
+    -> spend_perk
+}
+
+=== spend_perk ===
+One talent to claim.
+{ points_available("perk") > 0:
+    * [Learn Night Vision]
+        ~ spend_point("perk", "night_vision")
+        -> spend_perk
 - else:
     -> sheet
 }
@@ -131,6 +152,7 @@ Focus {resource("focus")}/{resource_max("focus")}, the working costs 2.
 ~ add_xp(150)
 ~ ready = level_up_ready()
 { ready:
+    ~ level_up()
     Something settles into place. Level {level()}. -> levelup
 - else:
     -> verdict
