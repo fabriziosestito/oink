@@ -7,7 +7,7 @@
 
 oink is a *librogame*
 ([gamebook](https://en.wikipedia.org/wiki/Gamebook)) engine for e-ink devices.
-It brings branching stories, 2d6 skill checks, and data-driven rules to screens
+It brings branching stories, configurable dice pools, and data-driven rules to screens
 that stay readable in sunlight. Think choose-your-own-adventure, with dice.
 Desktop builds run today, and phones and more e-ink hardware are on the roadmap.
 
@@ -20,10 +20,11 @@ rulebook, the YAML format, checks, and the engine API.
 
 - 📖 **Stories that branch.** Choices, consequences, and several endings. A
   decision can come back chapters later.
-- 🎲 **2d6 skill checks.** Roll two dice, add an ability and any modifiers, and
-  beat the difficulty, the way
-  [Disco Elysium](https://en.wikipedia.org/wiki/Disco_Elysium) does it. A double
-  six always wins, a double one always loses. White checks can be retried, red
+- 🎲 **Dice your way.** Roll 2d6 in the
+  [Disco Elysium](https://en.wikipedia.org/wiki/Disco_Elysium) style, d20, percentile
+  d100, or keep-highest and keep-lowest pools. Every ruleset declares its dice,
+  roll direction, and outcome table in plain YAML, so doubles, naturals, and
+  margins decide glory or disaster. White checks can be retried, red
   checks are one shot.
 - 🧾 **Your world, your rules.** Define abilities, perks, conditions, and items
   in plain text. The engine tracks them and uses them in checks. See the
