@@ -636,6 +636,24 @@ character_creation:
     }
 
     #[test]
+    fn loader_rejects_zero_creation_costs() {
+        for (costs, message) in [
+            (
+                "costs:\n    characteristics: 0",
+                "character creation cost for characteristics must be positive",
+            ),
+            (
+                "costs:\n    abilities: 0",
+                "character creation cost for abilities must be positive",
+            ),
+        ] {
+            let yaml = format!("character_creation:\n  {costs}\n");
+            let error = Rulebook::load(&yaml).unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[test]
     fn creation_costs_default_to_one_flat_point() {
         let yaml = "character_creation:\n  pools:\n    characteristic_points: 3\n";
         let rulebook = Rulebook::load(yaml).expect("loads").rulebook;

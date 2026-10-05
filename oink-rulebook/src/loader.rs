@@ -375,6 +375,14 @@ impl Rulebook {
         }
 
         if let Some(creation) = &self.creation {
+            if creation.costs.characteristics == 0 {
+                errors.push(
+                    "character creation cost for characteristics must be positive".to_string(),
+                );
+            }
+            if creation.costs.abilities == 0 {
+                errors.push("character creation cost for abilities must be positive".to_string());
+            }
             for id in creation.base.characteristics.keys() {
                 if !self.characteristics.contains_key(id) {
                     errors.push(format!(
