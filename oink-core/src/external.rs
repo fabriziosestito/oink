@@ -656,7 +656,6 @@ pub(crate) fn bind_external_functions(
         })?;
     }
 
-    #[cfg(feature = "spells")]
     {
         let state = Rc::clone(state);
         bind(story, "cast_spell", false, move |_name, args| {

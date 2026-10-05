@@ -82,7 +82,7 @@ oink/
 │       ├── check.rs     # active and passive checks with dice profiles
 │       ├── dice.rs      # Dice trait, notation parser, seeded dice for tests
 │       ├── names.rs     # renameable display labels
-│       ├── spell.rs     # (feature: spells) cost and cast resolution
+│       ├── spell.rs     # cost and cast resolution
 │       └── state.rs     # Character state and change events
 ├── oink-sim/            # desktop simulator: 960x540 Gray4, keys 1-9 choose, Esc quits
 │   └── src/main.rs
@@ -121,8 +121,7 @@ oink/
   `has_item`, `add_item`, `remove_item`, `use_item`, `has_perk`, `add_perk`,
   `remove_perk`, `has_condition`, `add_condition`, `remove_condition`,
   `has_tag`, `ability_level`, `characteristic`, `characteristic_bonus`,
-  `resource`, `spend_resource`, `restore_resource`, `end_scene`. `cast_spell` is bound
-  with the `spells` feature.
+  `resource`, `spend_resource`, `restore_resource`, `end_scene`, `cast_spell`.
 
 ## Presentation modes: the tag contract
 
@@ -206,6 +205,6 @@ theme, and deployment.
       resources) bound into Ink via `bladeink`'s `bind_external_function`.
 - [ ] Dialog and map renderers in the UI layer.
 - [ ] Characters/maps YAML schemas.
-- [x] Optional spells module behind the `spells` feature.
+- [x] Spells module with cost and cast resolution.
 - [ ] Story and world state (flags, counters) and save/load (issue #2).
 - [x] Pig mascot + logo (`assets/logo.png`, hi-res in `assets/logo-hires.png`).

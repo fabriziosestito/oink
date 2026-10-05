@@ -29,9 +29,6 @@ make lint    # clippy, with warnings as errors
 Run `make test` after engine changes. Run `make fmt` and `make lint` before you
 commit.
 
-Spells are optional and sit behind the `spells` feature. Test them with
-`cargo test -p oink-core --features spells`.
-
 ## Run the simulator
 
 `make sim` opens a 960x540 window. Press a key from 1 to 9 to select a choice.

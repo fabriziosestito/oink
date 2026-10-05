@@ -1,7 +1,6 @@
 //! Spell casting: spend a resource, then run the spell's active check.
 //!
-//! This module is behind the `spells` feature. The story applies the
-//! consequences of the returned outcome itself.
+//! The story applies the consequences of the returned outcome itself.
 
 use crate::check::{CheckError, CheckRequest, CheckResult, Checks, Outcome};
 use crate::dice::Dice;

@@ -946,9 +946,6 @@ EXTERNAL characteristic(id)
         ] {
             for block in markdown.split("```ink\n").skip(1) {
                 let source = block.split("```").next().unwrap();
-                if source.contains("EXTERNAL cast_spell") && !cfg!(feature = "spells") {
-                    continue;
-                }
                 let yaml = if page == "overview" {
                     minimal_yaml
                 } else {
@@ -974,7 +971,6 @@ EXTERNAL characteristic(id)
         }
     }
 
-    #[cfg(feature = "spells")]
     #[test]
     fn spells_are_bound_and_spend_resources() {
         let ink = r#"

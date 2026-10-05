@@ -225,11 +225,10 @@ of items, perks, conditions, and environments before calling those mutators.
 There is no standalone Rust `Character::use_item()` method today; the Ink
 binding composes condition application and item removal.
 
-## Optional spell API
+## Spell API
 
-Enable `oink-rulebook/spells` to call `oink_rulebook::spell::cast()` directly.
-Enable `oink-core/spells` to also bind `cast_spell()` in stories.
-The core feature enables the rulebook feature automatically.
+Call `oink_rulebook::spell::cast()` directly, or bind `cast_spell()` in
+stories through `oink-core`.
 
 ```rust
 pub fn cast<D: Dice + ?Sized>(

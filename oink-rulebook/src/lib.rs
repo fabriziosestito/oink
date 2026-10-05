@@ -11,7 +11,6 @@ pub mod loader;
 pub mod model;
 pub mod modifiers;
 pub mod names;
-#[cfg(feature = "spells")]
 pub mod spell;
 pub mod state;
 
@@ -30,7 +29,6 @@ pub use model::{
 };
 pub use modifiers::{Breakdown, BreakdownEntry};
 pub use names::{Names, Section};
-#[cfg(feature = "spells")]
 pub use spell::{CastResult, SpellError};
 pub use state::{Character, CreationPointKind, CreationSpent, StateChange};
 
@@ -541,6 +539,37 @@ starting_character:
     }
 
     #[test]
+    fn derived_max_never_drops_below_min() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    min: 1
+    max: 14
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+resources:
+  grit:
+    name: Grit
+    min: 2
+    max_from:
+      - characteristic: c
+        mode: thresholds
+        thresholds:
+          - { at: 10, value: 0 }
+starting_character:
+  characteristics: { c: 1 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let character = Character::from_starting(&rulebook);
+        // Raw derivation is 0, so the effective maximum is the floor,
+        // matching the balance instead of undercutting it.
+        assert_eq!(character.resource_max(&rulebook, "grit"), Some(2));
+        assert_eq!(character.resource("grit"), Some(2));
+    }
+
+    #[test]
     fn loader_rejects_unknown_derivation_characteristic() {
         let yaml = r#"
 resources:
@@ -813,6 +842,77 @@ character_creation:
         assert!(character.has_tag(&rulebook, "strong"));
         assert!(character.validate_creation(&rulebook).is_empty());
         assert!(!character.apply_preset(&rulebook, "missing"));
+    }
+
+    #[test]
+    fn apply_preset_refills_start_full_derived_resources() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    min: 1
+    max: 14
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+resources:
+  health:
+    name: Health
+    min: 0
+    start_full: true
+    max_from:
+      - characteristic: c
+        mode: per_point
+        value_per_point: 1
+character_creation:
+  base:
+    characteristics: { c: 2 }
+  presets:
+    big:
+      name: Big
+      characteristics: { c: 8 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::begin_creation(&rulebook);
+        assert_eq!(character.resource("health"), Some(2));
+        assert!(character.apply_preset(&rulebook, "big"));
+        // Base balance was 2, but the preset raises the derived maximum
+        // to 8, so a fresh start_full sheet refills instead of keeping 2.
+        assert_eq!(character.resource_max(&rulebook, "health"), Some(8));
+        assert_eq!(character.resource("health"), Some(8));
+    }
+
+    #[test]
+    fn lowering_a_characteristic_clamps_resource_balances() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    min: 1
+    max: 14
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+resources:
+  health:
+    name: Health
+    min: 0
+    start_full: true
+    max_from:
+      - characteristic: c
+        mode: per_point
+        value_per_point: 1
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::begin_creation(&rulebook);
+        assert!(character.set_characteristic(&rulebook, "c", 8));
+        character.restore_resource(&rulebook, "health", 99);
+        assert_eq!(character.resource("health"), Some(8));
+        // Lowering c drops the derived maximum to 2, so the balance
+        // follows instead of floating above the new maximum.
+        assert!(character.set_characteristic(&rulebook, "c", 2));
+        assert_eq!(character.resource_max(&rulebook, "health"), Some(2));
+        assert_eq!(character.resource("health"), Some(2));
     }
 
     #[test]
@@ -1138,6 +1238,32 @@ levelling:
     }
 
     #[test]
+    fn gapped_curve_blocks_progression_at_the_gap() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    min: 1
+    max: 14
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+levelling:
+  max_level: 10
+  xp_curve:
+    - { level: 3, xp: 250 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::from_starting(&rulebook);
+        character.add_xp(1000);
+        // No entry names level 2, so the 250 XP threshold for level 3
+        // never applies to the 1 -> 2 step.
+        assert!(!character.level_up_ready(&rulebook));
+        assert!(!character.level_up(&rulebook));
+        assert_eq!(character.level(), 1);
+    }
+
+    #[test]
     fn levelling_absent_means_no_levels() {
         let rulebook = fixture();
         let mut character = Character::from_starting(&rulebook);
@@ -1361,7 +1487,6 @@ characteristics:
         assert_eq!(rulebook.characteristics["ws"].bonus_for(42), 42);
     }
 
-    #[cfg(feature = "spells")]
     #[test]
     fn spells_spend_resources_and_roll() {
         let rulebook = Rulebook::load(SAMPLE).expect("sample loads").rulebook;
@@ -1377,7 +1502,6 @@ characteristics:
         assert!(matches!(error, spell::SpellError::NotEnough { .. }));
     }
 
-    #[cfg(feature = "spells")]
     #[test]
     fn spells_ignore_advantage_from_state() {
         let yaml = r#"

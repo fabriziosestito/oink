@@ -130,7 +130,6 @@ impl Character {
 
         for (id, definition) in &rulebook.resources {
             let max = definition.derived_max(&character.characteristics);
-            let ceiling = max.max(definition.min);
             let value = starting
                 .resources
                 .get(id)
@@ -142,7 +141,7 @@ impl Character {
                 });
             character
                 .resources
-                .insert(id.clone(), value.clamp(definition.min, ceiling));
+                .insert(id.clone(), value.clamp(definition.min, max));
         }
 
         character.apply_grants(rulebook);
@@ -410,7 +409,6 @@ impl Character {
 
         for (id, definition) in &rulebook.resources {
             let max = definition.derived_max(&character.characteristics);
-            let ceiling = max.max(definition.min);
             let value = if definition.start_full {
                 max
             } else {
@@ -418,7 +416,7 @@ impl Character {
             };
             character
                 .resources
-                .insert(id.clone(), value.clamp(definition.min, ceiling));
+                .insert(id.clone(), value.clamp(definition.min, max));
         }
 
         character
@@ -574,10 +572,13 @@ impl Character {
         }
         for (id, definition) in &rulebook.resources {
             let max = definition.derived_max(&self.characteristics);
-            let ceiling = max.max(definition.min);
-            let value = self.resources.get(id).copied().unwrap_or(definition.min);
+            let value = if definition.start_full {
+                max
+            } else {
+                self.resources.get(id).copied().unwrap_or(definition.min)
+            };
             self.resources
-                .insert(id.clone(), value.clamp(definition.min, ceiling));
+                .insert(id.clone(), value.clamp(definition.min, max));
         }
         let pools = &rulebook
             .creation
@@ -597,13 +598,21 @@ impl Character {
     }
 
     /// Set a stored characteristic directly, clamped to its bounds, without
-    /// spending points. Returns false for unknown characteristics.
+    /// spending points. Lowering a value can shrink derived maxima, so
+    /// balances above the new maxima clamp down silently. Returns false
+    /// for unknown characteristics.
     pub fn set_characteristic(&mut self, rulebook: &Rulebook, id: &str, value: i32) -> bool {
         let Some(definition) = rulebook.characteristics.get(id) else {
             return false;
         };
         self.characteristics
             .insert(id.to_string(), value.clamp(definition.min, definition.max));
+        for (id, definition) in &rulebook.resources {
+            let max = definition.derived_max(&self.characteristics);
+            if self.resources.get(id).copied().unwrap_or(0) > max {
+                self.resources.insert(id.clone(), max);
+            }
+        }
         true
     }
 
@@ -679,7 +688,7 @@ impl Character {
         self.xp = self.xp.saturating_add(amount);
     }
 
-    /// True when banked XP reaches a higher curve level below the cap.
+    /// True when banked XP reaches the next curve level below the cap.
     pub fn level_up_ready(&self, rulebook: &Rulebook) -> bool {
         let Some((_, need)) = Self::next_threshold(rulebook, self.level) else {
             return false;
@@ -721,17 +730,20 @@ impl Character {
         true
     }
 
-    /// The next curve entry above a level as `(level, xp)`, if any.
+    /// The curve entry for the level right above the given one, if any.
+    /// Each threshold applies only to the level it names: a curve without
+    /// an entry for the next level blocks progression instead of borrowing
+    /// a later threshold.
     fn next_threshold(rulebook: &Rulebook, level: u32) -> Option<(u32, u32)> {
         let levelling = rulebook.levelling.as_ref()?;
         if level >= levelling.max_level {
             return None;
         }
+        let next = level.saturating_add(1);
         levelling
             .xp_curve
             .iter()
-            .filter(|entry| entry.level > level)
-            .min_by_key(|entry| entry.level)
+            .find(|entry| entry.level == next)
             .map(|entry| (entry.level, entry.xp))
     }
 
@@ -797,8 +809,7 @@ impl Character {
         let Some(current) = self.resources.get(id).copied() else {
             return Vec::new();
         };
-        let ceiling =
-            i64::from(definition.derived_max(&self.characteristics)).max(i64::from(definition.min));
+        let ceiling = i64::from(definition.derived_max(&self.characteristics));
         let next = (i64::from(current) + i64::from(delta)).clamp(i64::from(definition.min), ceiling)
             as i32;
         if next == current {
