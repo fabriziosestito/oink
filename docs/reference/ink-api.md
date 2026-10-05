@@ -177,8 +177,7 @@ banks, but readiness and level-ups stay false.
 ## Spells
 
 `cast_spell(id)` returns an active-check outcome string. The string ID must name
-a spell in the rulebook. The application must enable `oink-core`'s `spells`
-feature; default builds do not bind this function.
+a spell in the rulebook.
 
 Casting validates the spell, resource balance, and check before applying a cost.
 A resolved cast pays its full cost on success or failure, including critical failure.

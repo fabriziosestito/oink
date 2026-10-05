@@ -255,7 +255,10 @@ A `thresholds` entry reads the highest `at` the characteristic reaches, like a
 bonus table. A `per_point` entry computes `base + value_per_point *
 characteristic`. Entries sum together, and derivation reads stored
 characteristic values, so temporary conditions never move resource maxima.
-Character creation pools are not implemented yet.
+Character creation pools live in `character_creation`: each pool grants points
+that `spend_point` consumes at the flat `costs` rate, presets mark every pool
+spent, and `validate: all_points_spent` requires each pool to reach zero. See
+[Character creation](#character-creation).
 
 Starting values are clamped to the bounds. Payments are all-or-nothing above
 the minimum. Restoration stops at the maximum.
@@ -337,7 +340,7 @@ points plus the interval perk points when the new level hits the interval.
 Curve levels must sit within 2 and the cap with no duplicates, and the
 interval must be positive when present.
 
-Definitions load in all builds. Casting requires the `spells` feature.
+Definitions load in all builds, and casting works in every build.
 See the [Ink API](ink-api.md#spells) for cost and failure behavior.
 
 ## Dice pools

@@ -226,10 +226,11 @@ impl Resource {
     /// The effective maximum: the plain `max` when no derivation is
     /// configured, otherwise the sum of every `max_from` entry. Derivation
     /// reads stored characteristic values only, so temporary conditions
-    /// never move resource maxima.
+    /// never move resource maxima. The result never drops below `min`, so
+    /// every caller shares one bound.
     pub fn derived_max(&self, characteristics: &BTreeMap<String, i32>) -> i32 {
         if self.max_from.is_empty() {
-            return self.max;
+            return self.max.max(self.min);
         }
         let mut total: i64 = 0;
         for entry in &self.max_from {
@@ -251,7 +252,7 @@ impl Resource {
             };
             total = total.saturating_add(part);
         }
-        total.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+        (total.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32).max(self.min)
     }
 
     pub fn sort_thresholds(&mut self) {
