@@ -379,8 +379,7 @@ impl Rulebook {
                 errors.push(
                     "character creation cost for characteristics must be positive".to_string(),
                 );
-            } else if creation.pools.characteristic_points % creation.costs.characteristics != 0
-            {
+            } else if creation.pools.characteristic_points % creation.costs.characteristics != 0 {
                 errors.push(format!(
                     "character creation characteristic_points {} must be a multiple of cost {}",
                     creation.pools.characteristic_points, creation.costs.characteristics
