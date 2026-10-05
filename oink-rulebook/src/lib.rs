@@ -683,6 +683,24 @@ character_creation:
     }
 
     #[test]
+    fn loader_rejects_indivisible_creation_pools() {
+        for (pools, message) in [
+            (
+                "pools:\n    characteristic_points: 3\n  costs:\n    characteristics: 2",
+                "characteristic_points 3 must be a multiple of cost 2",
+            ),
+            (
+                "pools:\n    ability_points: 3\n  costs:\n    abilities: 2",
+                "ability_points 3 must be a multiple of cost 2",
+            ),
+        ] {
+            let yaml = format!("character_creation:\n  {pools}\n");
+            let error = Rulebook::load(&yaml).unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+        }
+    }
+
+    #[test]
     fn creation_costs_default_to_one_flat_point() {
         let yaml = "character_creation:\n  pools:\n    characteristic_points: 3\n";
         let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
@@ -793,7 +811,7 @@ character_creation:
   base:
     characteristics: { c: 2 }
   pools:
-    characteristic_points: 3
+    characteristic_points: 4
   costs:
     characteristics: 2
 "#;
@@ -801,12 +819,18 @@ character_creation:
         let mut character = Character::begin_creation(&rulebook);
         assert!(character.spend_point(&rulebook, CreationPointKind::Characteristic, "c"));
         assert_eq!(character.characteristic("c"), Some(3));
-        // One point left, cost two: refused without changes.
-        assert!(!character.spend_point(&rulebook, CreationPointKind::Characteristic, "c"));
-        assert_eq!(character.characteristic("c"), Some(3));
         assert_eq!(
             character.points_available(&rulebook, CreationPointKind::Characteristic),
-            1
+            2
+        );
+        assert!(character.spend_point(&rulebook, CreationPointKind::Characteristic, "c"));
+        assert_eq!(character.characteristic("c"), Some(4));
+        // No points left, cost two: refused without changes.
+        assert!(!character.spend_point(&rulebook, CreationPointKind::Characteristic, "c"));
+        assert_eq!(character.characteristic("c"), Some(4));
+        assert_eq!(
+            character.points_available(&rulebook, CreationPointKind::Characteristic),
+            0
         );
 
         let yaml = r#"
