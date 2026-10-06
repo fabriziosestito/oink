@@ -1,6 +1,6 @@
 # oink - gamebooks on e-ink
 
-.PHONY: all build sim test check fmt lint clean m5paper docs docs-build docs-serve
+.PHONY: all build sim run test check fmt lint clean m5paper docs docs-build docs-serve
 
 all: build
 
@@ -10,6 +10,10 @@ build:
 # Run the desktop simulator (requires SDL2: brew install sdl2)
 sim:
 	cargo run -p oink-sim
+
+# Play the demo in the terminal. Pass flags with ARGS, e.g. make run ARGS="--seed 7"
+run:
+	cargo run -p oink-cli -- run examples/high-pass $(ARGS)
 
 test:
 	cargo test --workspace

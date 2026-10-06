@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["oink-core", "oink-rulebook", "oink-sim"]
+members = ["oink-core", "oink-rulebook", "oink-sim", "oink-cli"]
 # oink-m5paper is built separately with the espup toolchain (see Makefile)
 
 [workspace.package]
