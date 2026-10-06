@@ -17,9 +17,11 @@ These were deliberate choices. Do not revisit them without a strong reason.
 
 1. **Ink for narrative, YAML for data.**
    - Story, scenes, branching, choices, skill-check flow: **Ink**
-     (`assets/story/*.ink`).
-   - Rule definitions and starting character: **YAML** (`assets/data/rulebook.yaml`).
-     The game title lives in `assets/data/config.yaml`.
+     (`story.ink` in a game bundle).
+   - Rule definitions and starting character: **YAML** (`rulebook.yaml`).
+     The game title lives in `config.yaml`.
+   - A game bundle is one directory with those three fixed file names.
+     The demo game is `examples/high-pass/`.
    - Checks use configurable dice profiles from YAML. The default profile rolls
      2d6 over with margin degrees and passive 6. Profiles can use d2 through
      d20 and d%, roll over or under, and define their own outcome table.
@@ -87,12 +89,13 @@ oink/
 ├── oink-sim/            # desktop simulator: 960x540 Gray4, keys 1-9 choose, Esc quits
 │   └── src/main.rs
 ├── oink-m5paper/        # (planned) ESP32 firmware: esp-idf-hal + it8951 + GT911 touch
+├── examples/
+│   └── high-pass/       # demo game bundle: The High Pass
+│       ├── config.yaml  # game title
+│       ├── rulebook.yaml # rulebook: characteristics, abilities, perks, checks
+│       └── story.ink    # the story
 └── assets/
-    ├── logo.png         # mascot (hi-res in logo-hires.png)
-    ├── story/main.ink   # demo story (troll on a bridge)
-    └── data/
-        ├── config.yaml  # game title
-        └── rulebook.yaml # rulebook: characteristics, abilities, perks, checks
+    └── logo.png         # mascot (hi-res in logo-hires.png), branding only
 ```
 
 ## Engine API (oink-core)
@@ -170,8 +173,10 @@ theme, and deployment.
   `cargo test`-able on the host and eventually embedded-friendly.
 - All rendering against `embedded_graphics::DrawTarget`; never code against
   the simulator or IT8951 directly in shared code.
-- Sample/demo content lives in `assets/`; the simulator loads it from the
-  workspace root (run via `make sim` or from repo root).
+- The demo game lives in `examples/high-pass/`; `assets/` holds branding
+  only. Tests never read the demo: `oink-core/tests/fixtures/` holds a
+  synthetic rulebook and story built for tests, and `oink-rulebook` uses
+  inline YAML.
 - Prose (docs, READMEs, error messages, chat replies): load the
   `simple-english` skill first and follow its plain-English rules.
 - User documentation starts at [documentation.md](documentation.md).

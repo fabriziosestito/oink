@@ -1,6 +1,6 @@
-# oink demo rulebook
+# The High Pass: rulebook for the demo game.
 #
-# See the rulebook issue for the full schema. Internal section keys are
+# See the YAML reference for the full schema. Internal section keys are
 # stable; the `names` block sets what the UI and the story show.
 
 names:

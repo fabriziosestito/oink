@@ -20,10 +20,10 @@ const LINE_HEIGHT: i32 = 24;
 const MAX_COLS: usize = ((WIDTH as i32 - 2 * MARGIN) / 10) as usize; // FONT_10X20 is 10px wide
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ink = std::fs::read_to_string("assets/story/main.ink")?;
+    let ink = std::fs::read_to_string("examples/high-pass/story.ink")?;
     let data = GameData::from_yaml(
-        &std::fs::read_to_string("assets/data/config.yaml")?,
-        &std::fs::read_to_string("assets/data/rulebook.yaml")?,
+        &std::fs::read_to_string("examples/high-pass/config.yaml")?,
+        &std::fs::read_to_string("examples/high-pass/rulebook.yaml")?,
     )?;
 
     let title = data.config.title.clone();

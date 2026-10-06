@@ -249,60 +249,62 @@ impl Engine {
 mod tests {
     use super::*;
 
-    fn demo_engine() -> Engine {
-        let ink = std::fs::read_to_string("../assets/story/main.ink").unwrap();
-        let data = GameData::from_yaml(
-            &std::fs::read_to_string("../assets/data/config.yaml").unwrap(),
-            &std::fs::read_to_string("../assets/data/rulebook.yaml").unwrap(),
-        )
-        .unwrap();
+    const CONFIG: &str = include_str!("../tests/fixtures/config.yaml");
+    const RULEBOOK: &str = include_str!("../tests/fixtures/rulebook.yaml");
+    const STORY: &str = include_str!("../tests/fixtures/story.ink");
+
+    fn fixture_data() -> GameData {
+        let data = GameData::from_yaml(CONFIG, RULEBOOK).unwrap();
         assert!(data.warnings.is_empty(), "warnings: {:?}", data.warnings);
-        Engine::new(&ink, data).unwrap()
+        data
+    }
+
+    /// The fixture story on the fixture rulebook.
+    fn fixture_engine() -> Engine {
+        Engine::new(STORY, fixture_data()).unwrap()
+    }
+
+    /// An inline story on the fixture rulebook.
+    fn example_engine(ink: &str) -> Engine {
+        Engine::new(ink, fixture_data()).unwrap()
     }
 
     #[test]
     fn story_runs_and_ends() {
-        let mut engine = demo_engine();
-        assert!(engine.character().has_item("rusty_cleaver"));
+        let mut engine = fixture_engine();
+        assert!(engine.character().has_item("stick"));
 
         let event = engine.start().unwrap();
         let Event::Scene { text, choices } = event else {
             panic!("expected choices")
         };
         assert_eq!(choices.len(), 2);
-        assert!(text.join(" ").contains("Snow on the high pass"));
+        assert!(text.join(" ").contains("Start."));
 
-        // Spend path reaches the sheet with unspent points shown.
+        // Spend path reaches the first pool with its points shown.
         let event = engine.choose(1).unwrap();
         let Event::Scene { text, .. } = event else {
             panic!("expected the spend scene")
         };
-        assert!(text.join(" ").contains("Body or mind?"));
+        assert!(text.join(" ").contains("Spend body: 1."));
     }
 
     #[test]
     fn precompiled_json_matches_source() {
-        let ink = std::fs::read_to_string("../assets/story/main.ink").unwrap();
-        let json = Compiler::new().compile(&ink).unwrap();
-        let data = GameData::from_yaml(
-            &std::fs::read_to_string("../assets/data/config.yaml").unwrap(),
-            &std::fs::read_to_string("../assets/data/rulebook.yaml").unwrap(),
-        )
-        .unwrap();
-        let mut engine = Engine::from_json(&json, data).unwrap();
+        let json = Compiler::new().compile(STORY).unwrap();
+        let mut engine = Engine::from_json(&json, fixture_data()).unwrap();
         assert!(matches!(engine.start().unwrap(), Event::Scene { .. }));
     }
 
     #[test]
     fn trial_checks_reach_the_end() {
         for trial_pick in [0, 1] {
-            let mut engine = demo_engine();
+            let mut engine = fixture_engine();
             engine.set_seed(7);
             engine.start().unwrap();
 
-            // Veteran preset, continue, then either pass1 branch.
-            // Every outcome of either check reaches the end.
-            engine.choose(0).unwrap();
+            // Preset, then either dark branch. Every outcome of either
+            // check reaches the end.
             engine.choose(0).unwrap();
             let mut event = engine.choose(trial_pick).unwrap();
             let mut steps = 0;
@@ -321,34 +323,37 @@ mod tests {
     }
 
     #[test]
-    fn smoke_applies_condition_and_keeper_clears_dark() {
-        let mut engine = demo_engine();
+    fn potion_applies_condition_and_the_walk_clears_dark() {
+        let mut engine = fixture_engine();
         engine.start().unwrap();
 
-        // Spend path keeps the starting inventory: exhaust every pool with
-        // the first option each time, take the lantern branch, move on,
-        // then smoke.
+        // Spend path: exhaust every pool with the first option, take the
+        // key branch, rest, then ask for judgment.
         let mut event = None;
-        for pick in [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0] {
+        for pick in [1, 0, 0, 0, 1, 1, 0] {
             event = Some(engine.choose(pick).unwrap());
         }
         assert!(matches!(event, Some(Event::TheEnd { .. })));
 
         {
             let character = engine.character();
-            assert!(character.has_condition("nicotine_rush"));
+            assert!(character.has_condition("buzzed"));
             assert!(!character.has_environment("dark"));
+            assert!(character.has_perk("brave"));
+            assert_eq!(character.characteristic("body"), Some(3));
+            assert_eq!(character.ability_level("might"), 2);
         }
 
         let changes = engine.take_changes();
         let described: Vec<String> = changes.iter().map(StateChange::to_string).collect();
-        assert!(described.iter().any(|line| line.contains("nicotine_rush")));
+        assert!(described.iter().any(|line| line.contains("buzzed")));
         assert!(described.iter().any(|line| line.contains("dark")));
     }
 
     #[test]
     fn consumables_and_resources_work_end_to_end() {
-        let ink = r#"
+        let mut engine = example_engine(
+            r#"
 EXTERNAL use_item(item)
 EXTERNAL has_item(item)
 EXTERNAL has_condition(condition)
@@ -358,74 +363,67 @@ EXTERNAL restore_resource(id, amount)
 
 VAR spent = false
 
-~ use_item("cigarette")
-{ has_item("cigarette"):
-    The cigarette is still in your pocket.
+~ use_item("potion")
+{ has_item("potion"):
+    The potion is still there.
 - else:
-    The cigarette is gone.
+    The potion is gone.
 }
-~ spent = spend_resource("focus", 2)
-Focus is {resource("focus")}.
-~ spent = restore_resource("focus", 1)
-Focus is {resource("focus")}.
-{ has_condition("nicotine_rush"):
-    The edges of the world go soft.
+~ spent = spend_resource("stamina", 2)
+Stamina is {resource("stamina")}.
+~ spent = restore_resource("stamina", 1)
+Stamina is {resource("stamina")}.
+{ has_condition("buzzed"):
+    Buzzed.
 }
 -> END
-"#;
-        let data = GameData::from_yaml(
-            &std::fs::read_to_string("../assets/data/config.yaml").unwrap(),
-            &std::fs::read_to_string("../assets/data/rulebook.yaml").unwrap(),
-        )
-        .unwrap();
-        let mut engine = Engine::new(ink, data).unwrap();
+"#,
+        );
 
         let event = engine.start().unwrap();
         let Event::TheEnd { text } = event else {
             panic!("expected the end")
         };
         let joined = text.join(" ");
-        assert!(joined.contains("The cigarette is gone."), "{joined}");
-        assert!(joined.contains("Focus is 1."), "{joined}");
-        assert!(joined.contains("Focus is 2."), "{joined}");
-        assert!(
-            joined.contains("The edges of the world go soft."),
-            "{joined}"
-        );
+        assert!(joined.contains("The potion is gone."), "{joined}");
+        assert!(joined.contains("Stamina is 1."), "{joined}");
+        assert!(joined.contains("Stamina is 2."), "{joined}");
+        assert!(joined.contains("Buzzed."), "{joined}");
     }
 
     #[test]
     fn checks_are_recorded_for_the_ui() {
-        let mut engine = demo_engine();
+        let mut engine = fixture_engine();
         engine.start().unwrap();
         assert!(engine.take_checks().is_empty());
 
-        // Veteran preset, continue: the pass1 passive records once.
+        // Preset: the dark passive records once.
         engine.set_seed(7);
-        engine.choose(0).unwrap();
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
         assert_eq!(checks.len(), 1);
-        assert_eq!(checks[0].ability, "logic");
+        assert_eq!(checks[0].ability, "wits");
         assert_eq!(checks[0].outcome, "pass");
         assert!(checks[0].dice.is_none());
 
-        // Climb, then the shrine rolls too: two active records.
+        // Roll, then the key scene rolls too: two active records on two
+        // profiles.
         engine.choose(0).unwrap();
         let checks = engine.take_checks();
         assert_eq!(checks.len(), 2);
-        assert_eq!(checks[0].ability, "endurance");
-        assert_eq!(checks[1].ability, "logic");
+        assert_eq!(checks[0].ability, "might");
+        assert_eq!(checks[0].pool, "pair");
+        assert_eq!(checks[1].ability, "wits");
+        assert_eq!(checks[1].pool, "single");
         assert!(checks.iter().all(|c| c.dice.is_some()));
         assert!(!checks[0].breakdown.entries.is_empty());
     }
 
     #[test]
     fn check_records_show_each_die_and_the_modifiers() {
-        let mut engine = demo_engine();
+        let mut engine = fixture_engine();
         engine.set_seed(7);
         engine.start().unwrap();
-        engine.choose(0).unwrap();
         engine.choose(0).unwrap();
         engine.take_checks();
         engine.choose(0).unwrap();
@@ -441,34 +439,27 @@ Focus is {resource("focus")}.
             description.contains(&format!("die {}", roll.dice[1])),
             "{description}"
         );
+        assert!(
+            description.contains("perk brave (tag dark) +2"),
+            "{description}"
+        );
         assert!(description.contains("score"), "{description}");
-        assert!(description.contains("target 8"), "{description}");
+        assert!(description.contains("target 7"), "{description}");
     }
 
     #[test]
-    fn lantern_branch_lights_the_way() {
-        let mut engine = demo_engine();
+    fn key_branch_grants_the_item() {
+        let mut engine = fixture_engine();
         engine.start().unwrap();
 
-        // Veteran preset, continue, light a lantern: the pass1 branch grants
-        // the lantern and shows it.
-        engine.choose(0).unwrap();
+        // Preset, take the key: the dark branch grants the item and shows it.
         engine.choose(0).unwrap();
         let event = engine.choose(1).unwrap();
         let Event::Scene { text, .. } = event else {
-            panic!("expected the keeper scene")
+            panic!("expected the key scene")
         };
-        assert!(text.join(" ").contains("Warm light"));
-        assert!(engine.character().has_item("lantern"));
-    }
-
-    fn example_engine(ink: &str) -> Engine {
-        let data = GameData::from_yaml(
-            include_str!("../../assets/data/config.yaml"),
-            include_str!("../../assets/data/rulebook.yaml"),
-        )
-        .unwrap();
-        Engine::new(ink, data).unwrap()
+        assert!(text.join(" ").contains("Key taken."));
+        assert!(engine.character().has_item("key"));
     }
 
     #[test]
@@ -477,8 +468,8 @@ Focus is {resource("focus")}.
             r#"
 EXTERNAL passive_value(ability, tags, modifier)
 EXTERNAL check_breakdown(ability, tags, modifier)
-Value: {passive_value("empathy", "artist", -3)}.
-Breakdown: {check_breakdown("empathy", "artist", -3)}.
+Value: {passive_value("wits", "tested", -3)}.
+Breakdown: {check_breakdown("wits", "tested", -3)}.
 -> END
 "#,
         );
@@ -486,8 +477,8 @@ Breakdown: {check_breakdown("empathy", "artist", -3)}.
             panic!("expected end")
         };
         let text = text.join(" ");
-        assert!(text.contains("Value: 8."), "{text}");
-        assert!(text.contains("perk artist (tag artist) +2"), "{text}");
+        assert!(text.contains("Value: 9."), "{text}");
+        assert!(text.contains("perk keen (tag tested) +2"), "{text}");
         assert!(text.contains("one-off -3"), "{text}");
         assert!(engine.take_checks().is_empty());
     }
@@ -504,7 +495,7 @@ EXTERNAL check_margin()
 EXTERNAL check_degrees()
 EXTERNAL check_die(index)
 VAR outcome = ""
-~ outcome = roll_check("endurance", 10, "", 0, "standard")
+~ outcome = roll_check("might", 10, "", 0, "pair")
 Outcome {outcome} roll {check_roll()} score {check_score()} target {check_target()} margin {check_margin()} degrees {check_degrees()} die0 {check_die(0)} die1 {check_die(1)}.
 -> END
 "#,
@@ -518,7 +509,7 @@ Outcome {outcome} roll {check_roll()} score {check_score()} target {check_target
         assert!(joined.contains("roll "), "{joined}");
         let checks = engine.take_checks();
         assert_eq!(checks.len(), 1);
-        assert_eq!(checks[0].pool, "standard");
+        assert_eq!(checks[0].pool, "pair");
     }
 
     #[test]
@@ -527,7 +518,7 @@ Outcome {outcome} roll {check_roll()} score {check_score()} target {check_target
             r#"
 EXTERNAL roll_check(ability, difficulty, tags, modifier)
 EXTERNAL check_score()
-~ roll_check("endurance", 10, "", 0)
+~ roll_check("might", 10, "", 0)
 First.
 + [Continue]
     Score {check_score()}.
@@ -545,19 +536,13 @@ First.
     }
 
     #[test]
-    fn mountain_story_runs_both_openings() {
-        let ink = include_str!("../../assets/story/main.ink");
-        let data = GameData::from_yaml(
-            include_str!("../../assets/data/config.yaml"),
-            include_str!("../../assets/data/rulebook.yaml"),
-        )
-        .unwrap();
-        assert!(data.warnings.is_empty(), "warnings: {:?}", data.warnings);
+    fn fixture_story_runs_both_openings_to_both_endings() {
+        let data = fixture_data();
         let mut open = false;
-        let mut waits = false;
+        let mut closed = false;
         for seed in 0..40 {
             for first in [0, 1] {
-                let mut engine = Engine::new(ink, data.clone()).unwrap();
+                let mut engine = Engine::new(STORY, data.clone()).unwrap();
                 engine.set_seed(seed);
                 let mut event = engine.start().unwrap();
                 let mut transcript = String::new();
@@ -569,7 +554,7 @@ First.
                             transcript.push_str(&text.join(" "));
                             transcript.push(' ');
                             steps += 1;
-                            assert!(steps < 60, "demo did not end");
+                            assert!(steps < 60, "fixture story did not end");
                             assert!(!choices.is_empty());
                             let at = if steps == 1 {
                                 first.min(choices.len() - 1)
@@ -581,20 +566,18 @@ First.
                     }
                 };
                 assert!(!transcript.contains("outcome =="), "leak: {transcript}");
-                assert!(transcript.contains("INT "), "{transcript}");
-                assert!(
-                    transcript.contains("settles into place"),
-                    "milestone missing: {transcript}"
-                );
-                if end.contains("pass is open") {
+                assert!(transcript.contains("Sheet: body "), "{transcript}");
+                assert!(transcript.contains("Passive passed."), "{transcript}");
+                assert!(transcript.contains("Level 2."), "{transcript}");
+                if end.contains("Open.") {
                     open = true;
                 }
-                if end.contains("mountain waits") {
-                    waits = true;
+                if end.contains("Closed.") {
+                    closed = true;
                 }
             }
         }
-        assert!(open && waits);
+        assert!(open && closed);
     }
 
     #[test]
@@ -602,7 +585,7 @@ First.
         let mut engine = example_engine(
             r#"
 EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
-~ roll_check("endurance", 10, "", 0, "nope")
+~ roll_check("might", 10, "", 0, "nope")
 -> END
 "#,
         );
@@ -616,7 +599,7 @@ EXTERNAL roll_check(ability, difficulty, tags, modifier, dice)
             r#"
 EXTERNAL roll_check(ability, difficulty, tags, modifier)
 EXTERNAL check_die(index)
-~ roll_check("endurance", 10, "", 0)
+~ roll_check("might", 10, "", 0)
 Die {check_die(5)}.
 -> END
 "#,
@@ -644,7 +627,7 @@ Score {check_score()}.
             r#"
 EXTERNAL add_condition(id)
 EXTERNAL end_scene()
-~ add_condition("nicotine_rush")
+~ add_condition("buzzed")
 First scene.
 + [Stay here]
     -> same_scene
@@ -662,14 +645,16 @@ Second scene.
         );
         engine.start().unwrap();
         engine.choose(0).unwrap();
-        assert!(engine.character().has_condition("nicotine_rush"));
+        assert!(engine.character().has_condition("buzzed"));
         engine.choose(0).unwrap();
-        assert!(engine.character().has_condition("nicotine_rush"));
+        assert!(engine.character().has_condition("buzzed"));
         engine.choose(0).unwrap();
-        assert!(!engine.character().has_condition("nicotine_rush"));
-        let expired = engine.take_changes().into_iter().filter(|change| {
-            matches!(change, StateChange::ConditionRemoved(id) if id == "nicotine_rush")
-        }).count();
+        assert!(!engine.character().has_condition("buzzed"));
+        let expired = engine
+            .take_changes()
+            .into_iter()
+            .filter(|change| matches!(change, StateChange::ConditionRemoved(id) if id == "buzzed"))
+            .count();
         assert_eq!(expired, 1);
     }
 
@@ -679,7 +664,7 @@ Second scene.
             r#"
 EXTERNAL passive_check(ability, dc, tags, modifier)
 First line.
-{passive_check("empathy", 8, "", 0): You notice the clue.}
+{passive_check("wits", 8, "", 0): You notice the clue.}
 + [Continue]
     -> END
 "#,
@@ -696,8 +681,8 @@ First line.
             r#"
 EXTERNAL spend_resource(id, amount)
 EXTERNAL resource(id)
-{spend_resource("focus", 4): Paid.|Not paid.}
-Focus: {resource("focus")}.
+{spend_resource("stamina", 4): Paid.|Not paid.}
+Stamina: {resource("stamina")}.
 -> END
 "#,
         );
@@ -705,7 +690,7 @@ Focus: {resource("focus")}.
             panic!("expected end")
         };
         assert!(text.join(" ").contains("Not paid."));
-        assert_eq!(engine.character().resource("focus"), Some(3));
+        assert_eq!(engine.character().resource("stamina"), Some(3));
         assert!(engine.take_changes().is_empty());
     }
 
@@ -848,7 +833,7 @@ Focus: {resource("focus")}.
         let mut engine = example_engine(
             r#"
 EXTERNAL passive_value(ability, tags, modifier)
-{passive_value("empathy", "", "wrong")}
+{passive_value("wits", "", "wrong")}
 -> END
 "#,
         );
@@ -872,14 +857,14 @@ EXTERNAL has_perk(id)
 EXTERNAL add_condition(id)
 EXTERNAL remove_condition(id)
 
-Logic {ability_level("logic")}, absent {ability_level("lockpicking")}.
-Intellect {characteristic("intellect")}, bonus {characteristic_bonus("intellect")}.
-~ add_perk("night_vision")
-{ has_perk("night_vision"): Night eyes.|No night eyes.}
-~ remove_perk("night_vision")
-{ has_perk("night_vision"): Still night eyes.|Night eyes gone.}
-~ add_condition("nicotine_rush")
-~ remove_condition("nicotine_rush")
+Might {ability_level("might")}, absent {ability_level("sneak")}.
+Body {characteristic("body")}, bonus {characteristic_bonus("body")}.
+~ add_perk("brave")
+{ has_perk("brave"): Brave.|Not brave.}
+~ remove_perk("brave")
+{ has_perk("brave"): Still brave.|Brave gone.}
+~ add_condition("tired")
+~ remove_condition("tired")
 -> END
 "#,
         );
@@ -887,17 +872,17 @@ Intellect {characteristic("intellect")}, bonus {characteristic_bonus("intellect"
             panic!("expected end")
         };
         let joined = text.join(" ");
-        assert!(joined.contains("Logic 1, absent 0."), "{joined}");
-        assert!(joined.contains("Intellect 3, bonus -2."), "{joined}");
-        assert!(joined.contains("Night eyes."), "{joined}");
-        assert!(joined.contains("Night eyes gone."), "{joined}");
+        assert!(joined.contains("Might 1, absent 0."), "{joined}");
+        assert!(joined.contains("Body 2, bonus -1."), "{joined}");
+        assert!(joined.contains("Brave."), "{joined}");
+        assert!(joined.contains("Brave gone."), "{joined}");
         assert_eq!(
             engine.take_changes(),
             vec![
-                StateChange::PerkAdded("night_vision".to_string()),
-                StateChange::PerkRemoved("night_vision".to_string()),
-                StateChange::ConditionAdded("nicotine_rush".to_string()),
-                StateChange::ConditionRemoved("nicotine_rush".to_string()),
+                StateChange::PerkAdded("brave".to_string()),
+                StateChange::PerkRemoved("brave".to_string()),
+                StateChange::ConditionAdded("tired".to_string()),
+                StateChange::ConditionRemoved("tired".to_string()),
             ]
         );
     }
@@ -949,7 +934,7 @@ EXTERNAL characteristic(id)
                 let yaml = if page == "overview" {
                     minimal_yaml
                 } else {
-                    include_str!("../../assets/data/rulebook.yaml")
+                    include_str!("../../examples/high-pass/rulebook.yaml")
                 };
                 let data = GameData::from_yaml("title: Documentation", yaml).unwrap();
                 let mut engine =
@@ -973,39 +958,35 @@ EXTERNAL characteristic(id)
 
     #[test]
     fn spells_are_bound_and_spend_resources() {
-        let ink = r#"
+        let mut engine = example_engine(
+            r#"
 EXTERNAL cast_spell(id)
 EXTERNAL resource(id)
 
 VAR outcome = ""
 
-~ outcome = cast_spell("telekinesis")
+~ outcome = cast_spell("zap")
 The spell: {outcome}.
-Focus is {resource("focus")}.
+Stamina is {resource("stamina")}.
 -> END
-"#;
-        let data = GameData::from_yaml(
-            &std::fs::read_to_string("../assets/data/config.yaml").unwrap(),
-            &std::fs::read_to_string("../assets/data/rulebook.yaml").unwrap(),
-        )
-        .unwrap();
-        let mut engine = Engine::new(ink, data).unwrap();
+"#,
+        );
         engine.set_seed(3);
 
         let event = engine.start().unwrap();
         let Event::TheEnd { text } = event else {
             panic!("expected the end")
         };
-        assert!(text.join(" ").contains("Focus is 1."), "{text:?}");
+        assert!(text.join(" ").contains("Stamina is 1."), "{text:?}");
         let checks = engine.take_checks();
         assert_eq!(checks.len(), 1);
-        assert_eq!(checks[0].ability, "arcana");
-        assert_eq!(checks[0].difficulty, 12);
+        assert_eq!(checks[0].ability, "spark");
+        assert_eq!(checks[0].difficulty, 7);
         assert!(checks[0].dice.is_some());
         assert_eq!(
             engine.take_changes(),
             vec![StateChange::ResourceChanged {
-                id: "focus".to_string(),
+                id: "stamina".to_string(),
                 from: 3,
                 to: 1,
             }]
