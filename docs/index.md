@@ -6,7 +6,7 @@ sidebar_position: 1
 # oink documentation
 
 oink is a gamebook engine for e-ink devices. Authors define rules in YAML and
-write story flow in Ink. The desktop simulator runs the same engine used by
+write story flow in Ink. The terminal player runs the same engine used by
 future device applications.
 
 This reference describes the current code. The project is in development,
@@ -26,5 +26,5 @@ so APIs can change. Future designs live in GitHub issues.
 - Read [architecture](architecture.md) for ownership and crate boundaries.
 - Read [publishing](publishing.md) to use these pages in a documentation site.
 
-For local setup and simulator controls, see the
+For local setup and the player controls, see the
 [contributing guide](https://github.com/fabriziosestito/oink/blob/main/CONTRIBUTING.md).

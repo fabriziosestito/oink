@@ -12,14 +12,14 @@ The host application owns display, input, and file access.
 ## Crates
 
 ```text
-oink-sim
+oink-cli
   -> oink-core
        -> bladeink / bladeink-compiler
        -> oink-rulebook
 ```
 
 `oink-rulebook` defines YAML models, validation, character operations,
-modifiers, checks, and optional spell resolution. It contains no database,
+modifiers, checks, and spell resolution. It contains no database,
 file-storage, display, or Ink runtime integration. `SystemDice` is the current
 host default and reads the clock and process ID; tests can inject `SeededDice`.
 
@@ -27,9 +27,18 @@ host default and reads the clock and process ID; tests can inject `SeededDice`.
 functions. It owns the live character, dice source, and notification queues.
 Rulebook operations perform the character mutations.
 
-`oink-sim` reads assets from disk, handles keyboard input, and renders story
-output with `embedded-graphics`. Its renderer currently takes a simulator display
-directly. Extracting a shared renderer for hardware remains future work.
+`oink-cli` is the first player. It builds the `oink` command, whose `run`
+subcommand reads a game bundle from disk and plays it in the terminal.
+A bundle is one directory with `config.yaml`, `rulebook.yaml`, and `story.ink`
+or a precompiled `story.ink.json`, plus an optional `cover.png`.
+The player prints each scene as text, takes picks from keys 1 to 9, mouse
+clicks on choice lines, or lines on stdin, and shows pictures through the
+Kitty, iTerm2, or Sixel graphics protocol when the terminal has one.
+The `--seed` and `--choices` flags make a run repeatable without input.
+
+Each player is a separate crate with its own binary. Device players will live
+under `players/`, with the M5Paper first. Device rendering goes through the
+`embedded-graphics` `DrawTarget` trait. The terminal player does not use it.
 
 ## Fixed definitions and live state
 
@@ -82,8 +91,9 @@ them while it advances. Do not retain a character borrow while advancing the eng
 6. The engine returns scene text and choices, or an ending.
 7. The host drains queues and renders the output it needs.
 
-The simulator drains check records today. Other hosts can also drain state
-changes to show item, perk, resource, or condition notices.
+The terminal player drains both queues after every step and prints check
+records and state changes under the scene text. Other hosts can do the same
+to show item, perk, resource, or condition notices.
 The queues are transient output, not an ordered history for later story queries.
 
 ## Story memory
