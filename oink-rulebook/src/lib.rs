@@ -797,6 +797,77 @@ character_creation:
     }
 
     #[test]
+    fn levelling_without_creation_grants_spendable_points() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    min: 1
+    max: 10
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+abilities:
+  a:
+    name: A
+    characteristic: c
+perks:
+  lucky:
+    name: Lucky
+levelling:
+  max_level: 3
+  xp_curve:
+    - { level: 2, xp: 100 }
+    - { level: 3, xp: 250 }
+  rewards:
+    per_level:
+      characteristic_points: 1
+      ability_points: 1
+    interval:
+      every: 2
+      perk_points: 1
+starting_character:
+  characteristics: { c: 1 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        assert!(rulebook.creation.is_none());
+        let mut character = Character::from_starting(&rulebook);
+        // No points before the first level-up.
+        assert_eq!(
+            character.points_available(&rulebook, CreationPointKind::Characteristic),
+            0
+        );
+        assert!(!character.spend_point(&rulebook, CreationPointKind::Characteristic, "c"));
+
+        character.add_xp(100);
+        assert!(character.level_up(&rulebook));
+        assert_eq!(character.level(), 2);
+        assert_eq!(
+            character.points_available(&rulebook, CreationPointKind::Characteristic),
+            1
+        );
+        assert_eq!(
+            character.points_available(&rulebook, CreationPointKind::Ability),
+            1
+        );
+        assert_eq!(
+            character.points_available(&rulebook, CreationPointKind::Perk),
+            1
+        );
+
+        // Unspent level rewards show up in validation.
+        assert_eq!(character.validate_creation(&rulebook).len(), 3);
+
+        assert!(character.spend_point(&rulebook, CreationPointKind::Characteristic, "c"));
+        assert_eq!(character.characteristic("c"), Some(2));
+        assert!(character.spend_point(&rulebook, CreationPointKind::Ability, "a"));
+        assert_eq!(character.ability_level("a"), 1);
+        assert!(character.spend_point(&rulebook, CreationPointKind::Perk, "lucky"));
+        assert!(character.has_perk("lucky"));
+        assert!(character.validate_creation(&rulebook).is_empty());
+    }
+
+    #[test]
     fn spend_point_respects_costs_and_maxima() {
         let yaml = r#"
 characteristics:
@@ -993,6 +1064,20 @@ resources:
             10
         );
         assert!(!character.has_perk("juggernaut"));
+    }
+
+    #[test]
+    fn spend_point_refuses_ability_level_overflow() {
+        let (rulebook, mut character) = creation_character();
+        assert!(character.set_ability(&rulebook, "logic", i32::MAX));
+        assert_eq!(character.ability_level("logic"), i32::MAX);
+        assert!(!character.spend_point(&rulebook, CreationPointKind::Ability, "logic"));
+        assert_eq!(character.ability_level("logic"), i32::MAX);
+        // The refused pick spends nothing.
+        assert_eq!(
+            character.points_available(&rulebook, CreationPointKind::Ability),
+            5
+        );
     }
 
     #[test]
@@ -1578,5 +1663,62 @@ starting_character:
         let mut dice = ScriptedDice::new(&[10, 4]);
         let result = spell::cast(&rulebook, &mut character, "bolt", &mut dice).unwrap();
         assert_eq!(result.check.pool, "standard");
+    }
+
+    #[test]
+    fn spells_enforce_prerequisites_without_spending_or_rolling() {
+        let yaml = r#"
+characteristics:
+  c:
+    name: C
+    min: 1
+    max: 10
+    bonus:
+      thresholds:
+        - { at: 1, bonus: 0 }
+abilities:
+  a:
+    name: A
+    characteristic: c
+resources:
+  mana: { name: Mana, min: 0, max: 5 }
+spells:
+  bolt:
+    name: Bolt
+    ability: a
+    cost: { resource: mana, amount: 1 }
+    check: { difficulty: 10 }
+prerequisites:
+  bolt:
+    requires:
+      characteristics: { c: 6 }
+starting_character:
+  characteristics: { c: 1 }
+  resources: { mana: 5 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::from_starting(&rulebook);
+
+        struct PanicDice;
+        impl Dice for PanicDice {
+            fn roll(&mut self, _sides: u16) -> u16 {
+                panic!("gated cast must not roll dice");
+            }
+        }
+
+        let mut dice = PanicDice;
+        let error = spell::cast(&rulebook, &mut character, "bolt", &mut dice).unwrap_err();
+        assert_eq!(
+            error,
+            spell::SpellError::MissingPrerequisites("bolt".to_string())
+        );
+        assert_eq!(error.to_string(), "missing prerequisites for `bolt`");
+        assert_eq!(character.resource("mana"), Some(5));
+
+        assert!(character.set_characteristic(&rulebook, "c", 6));
+        let mut dice = ScriptedDice::new(&[6, 6]);
+        let result = spell::cast(&rulebook, &mut character, "bolt", &mut dice).unwrap();
+        assert_eq!(result.spent, 1);
+        assert_eq!(character.resource("mana"), Some(4));
     }
 }

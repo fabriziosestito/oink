@@ -208,11 +208,11 @@ in-memory character and return notices.
 | `on_scene_end()` | Decrements durations and returns expiry notices |
 | `begin_creation(&rulebook)` | Builds a fresh sheet from the creation base |
 | `reset_character(&rulebook)` | Rebuilds the sheet from the creation base |
-| `points_available(&rulebook, kind)` | Returns unspent pool points as `u32` |
-| `spend_point(&rulebook, kind, id)` | Spends the flat cost and applies one pick; false without changes |
+| `points_available(&rulebook, kind)` | Returns unspent pool and level-bonus points as `u32` |
+| `spend_point(&rulebook, kind, id)` | Spends the flat cost (1 without creation) and applies one pick; false without changes |
 | `apply_preset(&rulebook, id)` | Applies a preset, refreshes derived maxima, marks pools spent |
 | `set_characteristic` / `set_ability` | Write values directly without spending; false for unknown IDs |
-| `validate_creation(&rulebook)` | Returns unspent-pool messages; empty means complete |
+| `validate_creation(&rulebook)` | Returns unspent-pool messages, level rewards included; empty means complete |
 | `meets_prerequisite(&rulebook, id)` | True when every requirement holds; ids without an entry pass |
 | `xp()` / `level()` | Return banked experience and current level |
 | `add_xp(amount)` | Banks experience without levelling |
@@ -247,7 +247,7 @@ pub struct CastResult {
 ```
 
 Errors include `UnknownSpell`, `UnknownDifficulty`, `UnknownResource`,
-`InvalidCost`, `NotEnough`, and `Check`. Rejected casts leave the balance and
+`MissingPrerequisites`, `InvalidCost`, `NotEnough`, and `Check`. Rejected casts leave the balance and
 dice sequence unchanged. Resolved casts pay even on failure.
 Direct Rust callers receive notices in `changes`; the engine binding queues them.
 
