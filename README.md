@@ -41,19 +41,21 @@ rulebook, the YAML format, checks, and the engine API.
 
 ## 🚀 Quickstart
 
-Play the demo story on your laptop, no hardware needed. You need Rust stable.
-On Linux, first install the SDL2 development package (`sudo apt install
-libsdl2-dev` on Debian and Ubuntu). On macOS, install CMake instead: the
-simulator builds its own SDL2 from source there, so the first build takes a
-few minutes.
+Play the demo story in your terminal, no hardware needed. You need Rust stable.
 
 ```sh
-make sim    # play the demo story
-make test   # the engine walks the demo story in milliseconds
+make run    # play The High Pass in the terminal
+make test   # the engine walks the test story in milliseconds
 ```
 
+`make run` builds the `oink` command and runs `oink run examples/high-pass`.
+Press a key from 1 to 9 or click a choice to pick it. Press Esc or q to quit.
+Terminals that speak the Kitty, iTerm2, or Sixel graphics protocol (WezTerm,
+Kitty, Ghostty, iTerm2, foot) show game pictures inline. Other terminals get
+the text only.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full command list and the
-simulator controls.
+flags that make `oink run` scriptable.
 
 ## 📖 Documentation
 

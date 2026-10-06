@@ -40,7 +40,7 @@ docs-build: website/node_modules
 docs-serve: website/node_modules
 	cd website && npm run serve
 
-# M5Paper firmware (not yet in the workspace).
+# M5Paper firmware player (planned as players/m5paper, built outside the workspace).
 # Requires the espup toolchain: cargo install espup && espup install
 m5paper:
-	@echo "oink-m5paper crate not created yet. See README."
+	@echo "players/m5paper not created yet. See AGENTS.md."

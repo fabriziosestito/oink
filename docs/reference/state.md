@@ -123,7 +123,7 @@ pub enum StateChange {
 the host drains them; the queue does not reset at scene boundaries.
 Re-adding an active condition with a different duration emits
 `StateChange::ConditionRefreshed`; the same duration emits nothing.
-The simulator currently displays check records but does not drain state-change notices.
+The terminal player prints check records and state-change notices under each scene.
 
 ## Story facts and saving
 
