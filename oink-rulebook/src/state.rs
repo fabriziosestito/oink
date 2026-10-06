@@ -427,25 +427,30 @@ impl Character {
         *self = Self::begin_creation(rulebook);
     }
 
-    /// Points left in a creation pool, including level rewards. Zero
-    /// without a creation section.
+    /// Points left in a creation pool, including level rewards. Without a
+    /// creation section the initial pool is zero, so the result counts
+    /// level rewards only.
     pub fn points_available(&self, rulebook: &Rulebook, kind: CreationPointKind) -> u32 {
-        let Some(creation) = rulebook.creation.as_ref() else {
-            return 0;
-        };
+        let creation = rulebook.creation.as_ref();
         let (pool, bonus, spent) = match kind {
             CreationPointKind::Characteristic => (
-                creation.pools.characteristic_points,
+                creation
+                    .map(|creation| creation.pools.characteristic_points)
+                    .unwrap_or(0),
                 self.level_bonus.characteristic_points,
                 self.creation_spent.characteristics,
             ),
             CreationPointKind::Ability => (
-                creation.pools.ability_points,
+                creation
+                    .map(|creation| creation.pools.ability_points)
+                    .unwrap_or(0),
                 self.level_bonus.ability_points,
                 self.creation_spent.abilities,
             ),
             CreationPointKind::Perk => (
-                creation.pools.perk_points,
+                creation
+                    .map(|creation| creation.pools.perk_points)
+                    .unwrap_or(0),
                 self.level_bonus.perk_points,
                 self.creation_spent.perks,
             ),
@@ -479,12 +484,11 @@ impl Character {
 
     /// Spend pool points and apply one pick. Characteristics and abilities
     /// rise by one for the flat cost, perks are granted for one point.
-    /// Returns false without changing anything when points run out or the
-    /// target is invalid. Grant side effects still apply on success.
+    /// Without a creation section each pick costs one point. Returns false
+    /// without changing anything when points run out, the target is
+    /// invalid, or the level cannot rise further. Grant side effects
+    /// still apply on success.
     pub fn spend_point(&mut self, rulebook: &Rulebook, kind: CreationPointKind, id: &str) -> bool {
-        let Some(creation) = rulebook.creation.as_ref() else {
-            return false;
-        };
         if !self.meets_prerequisite(rulebook, id) {
             return false;
         }
@@ -493,7 +497,11 @@ impl Character {
                 let Some(definition) = rulebook.characteristics.get(id) else {
                     return false;
                 };
-                let cost = creation.costs.characteristics;
+                let cost = rulebook
+                    .creation
+                    .as_ref()
+                    .map(|creation| creation.costs.characteristics)
+                    .unwrap_or(1);
                 if self.points_available(rulebook, kind) < cost {
                     return false;
                 }
@@ -515,12 +523,19 @@ impl Character {
                 if !rulebook.abilities.contains_key(id) {
                     return false;
                 }
-                let cost = creation.costs.abilities;
+                let cost = rulebook
+                    .creation
+                    .as_ref()
+                    .map(|creation| creation.costs.abilities)
+                    .unwrap_or(1);
                 if self.points_available(rulebook, kind) < cost {
                     return false;
                 }
                 let level = self.abilities.get(id).copied().unwrap_or(0);
-                self.abilities.insert(id.to_string(), level + 1);
+                let Some(next) = level.checked_add(1) else {
+                    return false;
+                };
+                self.abilities.insert(id.to_string(), next);
                 self.creation_spent.abilities = self.creation_spent.abilities.saturating_add(cost);
                 true
             }
@@ -628,34 +643,34 @@ impl Character {
 
     /// Check every pool, including level rewards, against its spent points.
     /// Empty means creation is complete under `validate: all_points_spent`.
-    /// Stories gate on `points_available`; this is the Rust-side equivalent.
+    /// Without a creation section the initial pools are zero, so the check
+    /// counts level rewards only. Stories gate on `points_available`; this
+    /// is the Rust-side equivalent.
     pub fn validate_creation(&self, rulebook: &Rulebook) -> Vec<String> {
         let mut problems = Vec::new();
-        let Some(creation) = rulebook.creation.as_ref() else {
-            return problems;
-        };
+        let creation = rulebook.creation.as_ref();
         for (kind, pool, spent) in [
             (
                 CreationPointKind::Characteristic,
                 creation
-                    .pools
-                    .characteristic_points
+                    .map(|creation| creation.pools.characteristic_points)
+                    .unwrap_or(0)
                     .saturating_add(self.level_bonus.characteristic_points),
                 self.creation_spent.characteristics,
             ),
             (
                 CreationPointKind::Ability,
                 creation
-                    .pools
-                    .ability_points
+                    .map(|creation| creation.pools.ability_points)
+                    .unwrap_or(0)
                     .saturating_add(self.level_bonus.ability_points),
                 self.creation_spent.abilities,
             ),
             (
                 CreationPointKind::Perk,
                 creation
-                    .pools
-                    .perk_points
+                    .map(|creation| creation.pools.perk_points)
+                    .unwrap_or(0)
                     .saturating_add(self.level_bonus.perk_points),
                 self.creation_spent.perks,
             ),

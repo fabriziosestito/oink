@@ -155,9 +155,8 @@ prerequisites:
       resources: { focus: 2 }
 ```
 
-Ink `add_perk` and `add_item` refuse gated ids with an error. Creation
-`spend_point` returns false and presets skip gated perks. Spell casting does
-not enforce prerequisites yet.
+Ink `add_perk`, `add_item`, and `cast_spell` refuse gated ids with an error. Creation
+`spend_point` returns false and presets skip gated perks.
 
 ## Environments
 
@@ -281,7 +280,9 @@ spells:
 ## Character creation
 
 The optional `character_creation` section describes point-buy creation. When
-absent, stories use `starting_character` directly. Creation runs only when the
+absent, stories use `starting_character` directly. Levelling needs no
+creation section: without one, level rewards still grant points and each
+pick costs 1 point. Creation runs only when the
 story calls its functions, so a story can also apply a preset silently and
 skip spending entirely.
 
@@ -308,18 +309,18 @@ character_creation:
       tags: [strong]
 ```
 
-Costs are flat points per pick, default to 1, and must be positive. A zero
-cost grants unlimited picks without completing validation. Each point pool
-must hold a multiple of its cost. A remainder leaves points that
-`spend_point` cannot spend. Then `validate: all_points_spent` never passes.
-The loader rejects pools with a remainder. The loader rejects preset and
+Costs are flat points per pick, default to 1, and must be positive. The
+loader rejects a zero cost for characteristics or abilities. Each point
+pool must hold a multiple of its cost. The loader rejects a pool that
+leaves a remainder. The loader rejects preset and
 base entries that reference unknown characteristics, abilities, or perks.
 
 ## Levelling
 
 The optional `levelling` section sets the XP curve, the level cap, and the
 rewards. Sheets start at level 1 with 0 XP. Experience comes only from the
-story through `add_xp`; checks never grant XP.
+story through `add_xp`; checks never grant XP. Rewards work without a
+`character_creation` section. Each pick then costs 1 point.
 
 ```yaml
 levelling:

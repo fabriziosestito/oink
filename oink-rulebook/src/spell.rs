@@ -14,6 +14,7 @@ pub enum SpellError {
     UnknownSpell(String),
     UnknownDifficulty(String),
     UnknownResource(String),
+    MissingPrerequisites(String),
     NotEnough {
         resource: String,
         required: i32,
@@ -34,6 +35,9 @@ impl fmt::Display for SpellError {
             }
             SpellError::UnknownResource(id) => {
                 write!(f, "spell costs unknown resource `{id}`")
+            }
+            SpellError::MissingPrerequisites(id) => {
+                write!(f, "missing prerequisites for `{id}`")
             }
             SpellError::NotEnough {
                 resource,
@@ -75,6 +79,10 @@ pub fn cast<D: Dice + ?Sized>(
         .spells
         .get(spell_id)
         .ok_or_else(|| SpellError::UnknownSpell(spell_id.to_string()))?;
+
+    if !character.meets_prerequisite(rulebook, spell_id) {
+        return Err(SpellError::MissingPrerequisites(spell_id.to_string()));
+    }
 
     let difficulty = match spell.check.difficulty.resolve(rulebook) {
         Some(value) => value,

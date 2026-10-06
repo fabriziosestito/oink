@@ -92,7 +92,8 @@ EXTERNAL remove_item(id)
 | `has_tag(tag)` | boolean | Tests character, perk, condition, and carried-item tags |
 
 Arguments are strings. Adding an unknown perk or condition produces an error.
-Adding a perk or item whose prerequisites fail produces an error too.
+Adding a perk or item whose prerequisites fail produces an error too. Casting
+a gated spell whose prerequisites fail produces an error too.
 Queries return false for absent IDs. Removal of absent IDs does nothing.
 Removing a source does not remove abilities or perks it previously granted.
 There are no `add_tag()` or `remove_tag()` Ink bindings today.
@@ -141,8 +142,10 @@ A zero payment succeeds without emitting a change record. Negative amounts produ
 
 ## Character creation
 
-These functions run only with a `character_creation` section; without one,
-`points_available` returns 0 and the rest fail closed. Creation runs only when
+These functions track point pools. Without a `character_creation` section,
+the initial pools are zero and each pick costs 1 point, so `points_available`
+and `spend_point` count level rewards only. `apply_preset` still fails
+without presets to apply. Creation runs only when
 the story calls these functions, so a story can also apply a preset silently.
 
 | Function | Return value | Behavior |
@@ -179,9 +182,9 @@ banks, but readiness and level-ups stay false.
 `cast_spell(id)` returns an active-check outcome string. The string ID must name
 a spell in the rulebook.
 
-Casting validates the spell, resource balance, and check before applying a cost.
+Casting validates prerequisites, the spell, resource balance, and check before applying a cost.
 A resolved cast pays its full cost on success or failure, including critical failure.
-An invalid or unaffordable cast produces a story error without spending or rolling.
+An invalid, gated, or unaffordable cast produces a story error without spending or rolling.
 The engine records both the resource change and the individual dice.
 
 ```ink
