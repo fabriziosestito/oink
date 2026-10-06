@@ -11,10 +11,10 @@ and the rules. The story controls choices, consequences, and endings.
 
 ## Engine configuration
 
-`assets/data/config.yaml` contains:
+`examples/high-pass/config.yaml` contains:
 
 ```yaml
-title: "Oink Demo"
+title: "The High Pass"
 ```
 
 The system uses two six-sided dice for active checks. There is no dice
@@ -22,7 +22,7 @@ expression setting. Passive checks use a fixed value of 6 instead of dice.
 
 ## Rulebook
 
-`assets/data/rulebook.yaml` contains named definitions and a starting character.
+`examples/high-pass/rulebook.yaml` contains named definitions and a starting character.
 IDs connect the definitions. Display names can change without changing those IDs.
 The [YAML reference](reference/yaml.md) lists every section and its fields.
 

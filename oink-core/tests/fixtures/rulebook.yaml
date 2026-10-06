@@ -1,0 +1,156 @@
+# Test fixture, not a game. The smallest rulebook that exercises every
+# engine binding. IDs name what they test. The demo game lives in
+# examples/ and is free to change; this file changes only when a test does.
+
+dice:
+  default: pair
+  profiles:
+    pair:
+      notation: "2d6"
+      direction: over
+      degrees: margin
+      passive: 6
+      outcomes:
+        - { all_max: true, outcome: critical_success }
+        - { all_min: true, outcome: critical_failure }
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+    single:
+      notation: "1d20"
+      direction: over
+      degrees: margin
+      passive: 10
+      outcomes:
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+
+characteristics:
+  body:
+    name: Body
+    min: 1
+    max: 9
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -1 }
+        - { at: 4, bonus: 0 }
+        - { at: 7, bonus: 1 }
+  mind:
+    name: Mind
+    min: 1
+    max: 9
+    default: 5
+    bonus:
+      thresholds:
+        - { at: 1, bonus: -1 }
+        - { at: 4, bonus: 0 }
+        - { at: 7, bonus: 1 }
+
+abilities:
+  might:
+    name: Might
+    characteristic: body
+  wits:
+    name: Wits
+    characteristic: mind
+  spark:
+    name: Spark
+    characteristic: mind
+  sneak:
+    name: Sneak
+    characteristic: body
+
+tags:
+  tested:
+    name: Tested
+  dark:
+    name: Dark
+
+perks:
+  keen:
+    name: Keen
+    modifiers:
+      characteristics: { mind: 1 }
+      abilities: { wits: 1 }
+      tags: { tested: 2 }
+    grants_tags: [tested]
+  brave:
+    name: Brave
+    modifiers:
+      tags: { dark: 2 }
+
+conditions:
+  tired:
+    name: Tired
+    modifiers:
+      abilities: { might: -2 }
+    duration: 3
+  buzzed:
+    name: Buzzed
+    modifiers:
+      characteristics: { mind: 2 }
+    duration: 2
+
+environments:
+  dark:
+    name: Dark
+    tags: [dark]
+    modifiers:
+      abilities: { sneak: -2 }
+
+items:
+  key:
+    name: Key
+  stick:
+    name: Stick
+    modifiers:
+      abilities: { might: 1 }
+  potion:
+    name: Potion
+    consumable: true
+    applies_conditions: [buzzed]
+
+resources:
+  stamina: { name: Stamina, min: 0, max: 5 }
+
+spells:
+  zap:
+    name: Zap
+    ability: spark
+    cost: { resource: stamina, amount: 2 }
+    check: { difficulty: 7 }
+
+starting_character:
+  characteristics: { body: 2, mind: 5 }
+  abilities: { might: 1, wits: 2, spark: 1 }
+  perks: [keen]
+  inventory: [stick, potion]
+  resources: { stamina: 3 }
+
+character_creation:
+  mode: pool
+  base:
+    characteristics: { body: 2, mind: 5 }
+    abilities: { might: 1, wits: 2, spark: 1 }
+  pools:
+    characteristic_points: 1
+    ability_points: 1
+    perk_points: 1
+  costs:
+    characteristics: 1
+    abilities: 1
+  validate: all_points_spent
+  presets:
+    ready:
+      name: Ready
+      characteristics: { body: 4 }
+      abilities: { might: 2 }
+      perks: [brave]
+
+levelling:
+  max_level: 2
+  xp_curve:
+    - { level: 2, xp: 10 }
+  rewards:
+    per_level:
+      ability_points: 1
