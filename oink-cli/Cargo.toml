@@ -1,0 +1,17 @@
+[package]
+name = "oink-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "oink command-line player: play a game bundle in the terminal"
+
+[[bin]]
+name = "oink"
+path = "src/main.rs"
+
+[dependencies]
+oink-core = { path = "../oink-core" }
+clap = { version = "4", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+ratatui = "0.30"
+ratatui-image = { version = "11", default-features = false, features = ["crossterm"] }

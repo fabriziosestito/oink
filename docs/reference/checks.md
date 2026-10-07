@@ -73,7 +73,7 @@ Your passive value is {passive_value("empathy", "artist", -1)}.
 -> END
 ```
 
-The simulator currently shows recorded passive failures as well as successes.
+The terminal player shows recorded passive failures as well as successes.
 A host UI can hide failed passive checks if the story needs hidden thresholds.
 
 ## How modifiers combine

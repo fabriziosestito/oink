@@ -37,8 +37,6 @@ mod tests {
     use super::*;
     use crate::dice::ScriptedDice;
 
-    const SAMPLE: &str = include_str!("../../assets/data/rulebook.yaml");
-
     const FIXTURE: &str = r#"
 names:
   perks: Talents
@@ -140,8 +138,8 @@ starting_character:
     }
 
     #[test]
-    fn sample_rulebook_loads_without_warnings() {
-        let loaded = Rulebook::load(SAMPLE).expect("sample loads");
+    fn fixture_loads_without_warnings() {
+        let loaded = Rulebook::load(FIXTURE).expect("fixture loads");
         assert!(
             loaded.warnings.is_empty(),
             "warnings: {:?}",
@@ -1425,17 +1423,64 @@ levelling:
 
     #[test]
     fn starting_character_applies_grants_and_defaults() {
-        let rulebook = Rulebook::load(SAMPLE).expect("sample loads").rulebook;
+        let yaml = r#"
+characteristics:
+  body:
+    name: Body
+    min: 1
+    max: 9
+    default: 5
+  mind:
+    name: Mind
+    min: 1
+    max: 9
+    default: 4
+abilities:
+  might:
+    name: Might
+    characteristic: body
+  wits:
+    name: Wits
+    characteristic: mind
+  spark:
+    name: Spark
+    characteristic: mind
+tags:
+  gifted:
+    name: Gifted
+    grants:
+      abilities: [spark]
+      perks: [granted]
+perks:
+  chosen:
+    name: Chosen
+  granted:
+    name: Granted
+items:
+  stick:
+    name: Stick
+resources:
+  stamina: { name: Stamina, min: 0, max: 5 }
+starting_character:
+  characteristics: { body: 2 }
+  abilities: { might: 1, wits: 2 }
+  tags: [gifted]
+  perks: [chosen]
+  inventory: [stick]
+  resources: { stamina: 3 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
         let character = Character::from_starting(&rulebook);
 
-        assert_eq!(character.characteristic("psyche"), Some(4));
-        assert_eq!(character.ability_level("logic"), 1);
-        assert_eq!(character.ability_level("empathy"), 2);
-        assert!(character.has_ability("arcana"));
-        assert!(character.has_perk("artist"));
-        assert!(character.has_perk("bookworm"));
-        assert!(character.has_item("rusty_cleaver"));
-        assert_eq!(character.resource("focus"), Some(3));
+        assert_eq!(character.characteristic("body"), Some(2));
+        assert_eq!(character.characteristic("mind"), Some(4));
+        assert_eq!(character.ability_level("might"), 1);
+        assert_eq!(character.ability_level("wits"), 2);
+        assert!(character.has_ability("spark"));
+        assert!(character.has_perk("chosen"));
+        assert!(character.has_perk("granted"));
+        assert!(character.has_item("stick"));
+        assert_eq!(character.resource("stamina"), Some(3));
     }
 
     #[test]
@@ -1598,16 +1643,51 @@ characteristics:
 
     #[test]
     fn spells_spend_resources_and_roll() {
-        let rulebook = Rulebook::load(SAMPLE).expect("sample loads").rulebook;
+        let yaml = r#"
+characteristics:
+  mind:
+    name: Mind
+    min: 1
+    max: 9
+    default: 5
+abilities:
+  spark:
+    name: Spark
+    characteristic: mind
+resources:
+  stamina: { name: Stamina, min: 0, max: 5 }
+spells:
+  zap:
+    name: Zap
+    ability: spark
+    cost: { resource: stamina, amount: 2 }
+    check: { difficulty: 12 }
+dice:
+  default: pair
+  profiles:
+    pair:
+      notation: "2d6"
+      direction: over
+      degrees: margin
+      outcomes:
+        - { all_max: true, outcome: critical_success }
+        - { margin_at_least: 0, outcome: success }
+        - { outcome: failure }
+starting_character:
+  characteristics: { mind: 5 }
+  abilities: { spark: 1 }
+  resources: { stamina: 3 }
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
         let mut character = Character::from_starting(&rulebook);
         let mut dice = ScriptedDice::new(&[6, 6]);
 
-        let result = spell::cast(&rulebook, &mut character, "telekinesis", &mut dice).unwrap();
+        let result = spell::cast(&rulebook, &mut character, "zap", &mut dice).unwrap();
         assert_eq!(result.outcome, Outcome::CriticalSuccess);
         assert_eq!(result.spent, 2);
-        assert_eq!(character.resource("focus"), Some(1));
+        assert_eq!(character.resource("stamina"), Some(1));
 
-        let error = spell::cast(&rulebook, &mut character, "telekinesis", &mut dice).unwrap_err();
+        let error = spell::cast(&rulebook, &mut character, "zap", &mut dice).unwrap_err();
         assert!(matches!(error, spell::SpellError::NotEnough { .. }));
     }
 

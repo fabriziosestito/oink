@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["oink-core", "oink-rulebook", "oink-sim"]
+members = ["oink-core", "oink-rulebook", "oink-cli"]
 # oink-m5paper is built separately with the espup toolchain (see Makefile)
 
 [workspace.package]
@@ -10,6 +10,5 @@ license = "Apache-2.0"
 [workspace.dependencies]
 bladeink = "2"
 bladeink-compiler = "2"
-embedded-graphics = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"

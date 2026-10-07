@@ -17,9 +17,11 @@ These were deliberate choices. Do not revisit them without a strong reason.
 
 1. **Ink for narrative, YAML for data.**
    - Story, scenes, branching, choices, skill-check flow: **Ink**
-     (`assets/story/*.ink`).
-   - Rule definitions and starting character: **YAML** (`assets/data/rulebook.yaml`).
-     The game title lives in `assets/data/config.yaml`.
+     (`story.ink` in a game bundle).
+   - Rule definitions and starting character: **YAML** (`rulebook.yaml`).
+     The game title lives in `config.yaml`.
+   - A game bundle is one directory with those three fixed file names.
+     The demo game is `examples/high-pass/`.
    - Checks use configurable dice profiles from YAML. The default profile rolls
      2d6 over with margin degrees and passive 6. Profiles can use d2 through
      d20 and d%, roll over or under, and define their own outcome table.
@@ -32,47 +34,54 @@ These were deliberate choices. Do not revisit them without a strong reason.
    - Target the `std` route via **esp-idf** (`esp-idf-hal`/`esp-idf-svc`) so
      `serde_yaml`, heap, threads, and FS work on device. Toolchain: `espup`.
 
-3. **No emulator; display abstraction instead.**
-   - There is no M5Paper emulator. All rendering goes through
-     `embedded-graphics`'s `DrawTarget` trait.
-   - Desktop dev uses `embedded-graphics-simulator` (SDL2). On device the
-     target is the IT8951 e-ink driver (`it8951` crate). Same engine and UI
-     code, two mains behind crates.
+3. **No emulator; players instead.**
+   - There is no M5Paper emulator. The desktop test bed is the terminal
+     player, `oink run` in `oink-cli`. In a terminal it draws a full-screen
+     page with `ratatui`: prose column, check records and notices, choices,
+     and a status bar. It takes keys and mouse clicks and shows the cover
+     through `ratatui-image` (Kitty, iTerm2, Sixel, or Unicode half blocks).
+     Pipes, `--choices`, and `--plain` get a plain transcript instead.
+     No SDL, no system dependencies.
+   - Each player is its own crate with its own binary. Device players go
+     under `players/` when they exist (M5Paper first), because they need
+     their own toolchains and cannot share one crate with the CLI.
+   - Device rendering goes through `embedded-graphics`'s `DrawTarget` trait.
+     On device the target is the IT8951 e-ink driver (`it8951` crate).
    - The engine core is a plain Rust crate, unit-testable with `cargo test` —
      faster iteration than any emulator.
 
 4. **Ink runtime: `bladeink` (2.x).**
    - Pure-Rust port of inkle's reference runtime; full language support
      (threads, flows, external functions, choice tags, save/load state).
-   - Compiled with `bladeink-compiler`: at startup in the simulator
-     (`Engine::new`), at build time for firmware (`Engine::from_json` loads
-     precompiled `.ink.json`).
+   - Compiled with `bladeink-compiler`: when a bundle is loaded from
+     `story.ink` (`Engine::new`), at build time for firmware
+     (`Engine::from_json` loads a precompiled `story.ink.json`).
    - Replaced `inkling` (0.12, unmaintained since 2020, no external
      functions/tags). Keep engine code runtime-agnostic where cheap.
 
-5. **Not published to crates.io.** This is an application (firmware +
-   simulator), not a library. The crate name `oink` is taken on crates.io
+5. **Not published to crates.io.** This is an application (players +
+   firmware), not a library. The crate name `oink` is taken on crates.io
    (pig latin crate) — irrelevant since we distribute via git/releases/flash.
-   If the core is ever extracted as a library, publish as `oink-engine` or
-   similar, not `oink`.
+   The CLI crate is `oink-cli` and its binary is `oink`. If the core is ever
+   extracted as a library, publish as `oink-engine` or similar, not `oink`.
 
 ## Workspace layout
 
 ```
 oink/
 ├── Cargo.toml           # workspace (resolver 2); shared deps in [workspace.dependencies]
-├── Makefile             # build / sim / test / check / fmt / lint / docs / clean / m5paper
-├── .cargo/config.toml   # SDL2 link path + CMake policy (macOS/aarch64)
+├── Makefile             # build / run / test / check / fmt / lint / docs / clean / m5paper
 ├── documentation.md    # entry point to user documentation
 ├── docs/index.md       # documentation navigation
 ├── docs/reference/     # YAML, checks, state, Ink API, and Rust API
 ├── docs/architecture.md # current crate boundaries and runtime ownership
 ├── website/             # Docusaurus site: theme and build config
 ├── oink-core/           # engine core: Ink runtime wrapper + YAML data model
-│   └── src/
-│       ├── lib.rs
-│       ├── data.rs      # Config, GameData (rulebook-backed)
-│       └── engine.rs    # Engine, Event, Choice, external bindings + tests
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── data.rs      # Config, GameData (rulebook-backed)
+│   │   └── engine.rs    # Engine, Event, Choice, external bindings + tests
+│   └── tests/fixtures/  # synthetic config, rulebook, and story for tests
 ├── oink-rulebook/       # rulebook crate: checks, modifiers, resources, character state
 │   └── src/
 │       ├── lib.rs
@@ -84,15 +93,32 @@ oink/
 │       ├── names.rs     # renameable display labels
 │       ├── spell.rs     # cost and cast resolution
 │       └── state.rs     # Character state and change events
-├── oink-sim/            # desktop simulator: 960x540 Gray4, keys 1-9 choose, Esc quits
-│   └── src/main.rs
-├── oink-m5paper/        # (planned) ESP32 firmware: esp-idf-hal + it8951 + GT911 touch
+├── oink-cli/            # the `oink` command: `run` plays a bundle in the terminal
+│   ├── src/
+│   │   ├── main.rs      # clap: oink run <BUNDLE_DIR> [--seed N] [--choices 1,3,2] [--plain]
+│   │   ├── bundle.rs    # reads config.yaml, rulebook.yaml, story.ink[.json], cover.png
+│   │   ├── game.rs      # engine setup shared by both players, THE_END line
+│   │   ├── markup.rs    # emphasis markup in prose: **bold**, *italic*, _italic_
+│   │   ├── wrap.rs      # word wrap over styled fragments
+│   │   ├── player.rs    # the transcript: stdin lines and scripted picks, --plain
+│   │   ├── cover.rs     # the cover picture through ratatui-image
+│   │   └── tui/         # the full-screen player (ratatui)
+│   │       ├── mod.rs   # event loop, key and mouse mapping, terminal setup
+│   │       ├── app.rs   # state: page, highlight, scroll, status, actions
+│   │       ├── view.rs  # layout: header, prose column, choices, status bar
+│   │       ├── text.rs  # styled lines for prose, checks, notices, choices
+│   │       └── theme.rs # semantic styles from the 16-color palette, NO_COLOR
+│   └── tests/
+│       ├── run.rs       # plays examples/high-pass through the binary
+│       └── docs.rs      # runs the Ink examples in docs/ against the demo rulebook
+├── players/             # (planned) device players, one crate each: m5paper first
+├── examples/
+│   └── high-pass/       # demo game bundle: The High Pass
+│       ├── config.yaml  # game title
+│       ├── rulebook.yaml # rulebook: characteristics, abilities, perks, checks
+│       └── story.ink    # the story
 └── assets/
-    ├── logo.png         # mascot (hi-res in logo-hires.png)
-    ├── story/main.ink   # demo story (troll on a bridge)
-    └── data/
-        ├── config.yaml  # game title
-        └── rulebook.yaml # rulebook: characteristics, abilities, perks, checks
+    └── logo.png         # mascot (hi-res in logo-hires.png), branding only
 ```
 
 ## Engine API (oink-core)
@@ -143,6 +169,13 @@ section updated as the single source of truth):
 happens in `oink-core` today (see roadmap). `bladeink` exposes tags
 (`Story::get_current_tags`, `Choice::tags`) so no runtime change is needed.
 
+Inline emphasis is part of the scene format too: `**bold**`, `*italic*`, and
+`_italic_` in prose and choice text, with the opening and closing rules in
+[docs/reference/ink-api.md](docs/reference/ink-api.md#emphasis-in-prose).
+The parser lives in `oink-cli/src/markup.rs` and the engine passes text
+through unchanged. Move the parser to `oink-core` when a second player
+needs it.
+
 External functions are bound by `oink-core` (inventory, perks, conditions,
 tags, checks, environments, resources; see the Engine API list). The writer calls
 `end_scene()` once per scene boundary to advance timed conditions. Choices,
@@ -154,10 +187,12 @@ go in YAML, referenced by ID from tags.
 ## Commands
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the full `make` list, and the
-simulator controls.
+player controls.
 
 Always run `make test` (and `make lint` before committing) after engine
-changes. The simulator is the manual test bed.
+changes. The terminal player is the manual test bed: `make run`, or
+`cargo run -p oink-cli -- run examples/high-pass`. For a repeatable walk, add
+`--seed N --choices 1,1,...`; CI plays the demo that way.
 
 `make docs` starts the documentation site with hot reload on both `docs/` and
 `website/`. See [docs/publishing.md](docs/publishing.md) for the site layout,
@@ -168,10 +203,15 @@ theme, and deployment.
 - Rust 2021 edition, workspace-level shared dependencies.
 - Keep `oink-core` free of any display/IO concerns — it must stay
   `cargo test`-able on the host and eventually embedded-friendly.
-- All rendering against `embedded_graphics::DrawTarget`; never code against
-  the simulator or IT8951 directly in shared code.
-- Sample/demo content lives in `assets/`; the simulator loads it from the
-  workspace root (run via `make sim` or from repo root).
+- Device rendering goes through `embedded_graphics::DrawTarget`; never code
+  against the IT8951 directly in shared code. The terminal player draws with
+  `ratatui` and does not use `embedded-graphics`.
+- Players are binaries, not libraries. Shared host code (bundle loading, a
+  layout for e-ink) gets extracted only when a second player needs it.
+- The demo game lives in `examples/high-pass/`; `assets/` holds branding
+  only. Tests never read the demo: `oink-core/tests/fixtures/` holds a
+  synthetic rulebook and story built for tests, and `oink-rulebook` uses
+  inline YAML.
 - Prose (docs, READMEs, error messages, chat replies): load the
   `simple-english` skill first and follow its plain-English rules.
 - User documentation starts at [documentation.md](documentation.md).
@@ -195,8 +235,16 @@ theme, and deployment.
 
 ## Roadmap / open items
 
-- [ ] `oink-m5paper` firmware crate (esp-idf, it8951, GT911 touch, SD/flash
-      asset loading; espup toolchain).
+- [x] Terminal player: `oink run` with keys, mouse, the cover picture, and
+      the `--seed` and `--choices` flags for CI.
+- [x] Full-screen ratatui page: styled checks and notices, a status bar
+      with resources, conditions, and level, emphasis markup in prose,
+      `--plain` for the transcript.
+- [ ] Terminal player extras: a character sheet panel, a help overlay, and
+      a journal of past scenes.
+- [ ] `players/m5paper` firmware crate (esp-idf, it8951, GT911 touch, SD/flash
+      bundle loading; espup toolchain).
+- [ ] A cover picture for `examples/high-pass` (`cover.png`).
 - [ ] More e-ink hardware targets beyond the M5Paper.
 - [ ] Mobile builds (iOS, Android).
 - [ ] Tag parsing in `oink-core` (`mode`, `speaker`, ...) — extend

@@ -1,15 +1,15 @@
 # oink - gamebooks on e-ink
 
-.PHONY: all build sim test check fmt lint clean m5paper docs docs-build docs-serve
+.PHONY: all build run test check fmt lint clean m5paper docs docs-build docs-serve
 
 all: build
 
 build:
 	cargo build --workspace
 
-# Run the desktop simulator (requires SDL2: brew install sdl2)
-sim:
-	cargo run -p oink-sim
+# Play the demo in the terminal. Pass flags with ARGS, e.g. make run ARGS="--seed 7"
+run:
+	cargo run -p oink-cli -- run examples/high-pass $(ARGS)
 
 test:
 	cargo test --workspace
@@ -40,7 +40,7 @@ docs-build: website/node_modules
 docs-serve: website/node_modules
 	cd website && npm run serve
 
-# M5Paper firmware (not yet in the workspace).
+# M5Paper firmware player (planned as players/m5paper, built outside the workspace).
 # Requires the espup toolchain: cargo install espup && espup install
 m5paper:
-	@echo "oink-m5paper crate not created yet. See README."
+	@echo "players/m5paper not created yet. See AGENTS.md."
