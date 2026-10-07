@@ -31,14 +31,26 @@ Rulebook operations perform the character mutations.
 subcommand reads a game bundle from disk and plays it in the terminal.
 A bundle is one directory with `config.yaml`, `rulebook.yaml`, and `story.ink`
 or a precompiled `story.ink.json`, plus an optional `cover.png`.
-The player prints each scene as text, takes picks from keys 1 to 9, mouse
-clicks on choice lines, or lines on stdin, and shows pictures through the
-Kitty, iTerm2, or Sixel graphics protocol when the terminal has one.
+In a terminal the player draws a full-screen page with ratatui: the prose in a
+centered column, the check records and state notices under it, the choices
+below, and a status bar with the character resources, conditions, and level.
+Picks come from keys 1 to 9, the arrow keys with Enter, or mouse clicks.
+The cover shows through ratatui-image, as a picture in terminals with the
+Kitty, iTerm2, or Sixel graphics protocol and as Unicode half blocks elsewhere.
+When stdin or stdout is not a terminal, or with `--plain`, the player prints a
+transcript and reads one pick per line.
 The `--seed` and `--choices` flags make a run repeatable without input.
+
+The player parses the emphasis markup in story and choice text, `**bold**`,
+`*italic*`, and `_italic_`, as described in the
+[Ink API reference](reference/ink-api.md#emphasis-in-prose). The engine passes
+the text through unchanged, so the markup is a player concern until a second
+player needs it.
 
 Each player is a separate crate with its own binary. Device players will live
 under `players/`, with the M5Paper first. Device rendering goes through the
-`embedded-graphics` `DrawTarget` trait. The terminal player does not use it.
+`embedded-graphics` `DrawTarget` trait. The terminal player draws with ratatui
+and does not use it.
 
 ## Fixed definitions and live state
 
