@@ -209,6 +209,30 @@ VAR result = ""
 This example uses the sample spell, whose cost is 2 Focus with a minimum of 0.
 The story owns all spell consequences beyond the resource cost.
 
+## Emphasis in prose
+
+Ink has no inline formatting. oink reads a small markup in story text and in
+choice text. Wrap a stretch in `**` for bold, and in `*` or `_` for italic.
+
+```ink
+The wind *howls* across the **high pass**. Keep _calm_ and walk on.
++ [Walk on, ***slowly***]
+    -> END
+```
+
+The rules:
+
+- A marker opens only when a non-space character follows it. A marker closes
+  only when a non-space character precedes it. The text `5 * 3` stays as
+  written.
+- An underscore inside a word, as in `snake_case`, is never a marker.
+- A marker without a partner prints as a literal character.
+- Ink reads `*` at the start of a line as a choice. If a line must start with
+  an emphasized word, use `_italic_`.
+
+The terminal player shows the emphasis as bold and italic text. The transcript
+mode removes the markers. The engine passes the text through unchanged.
+
 ## Execution and errors
 
 Queries without side effects can run during bladeink's lookahead, its evaluation

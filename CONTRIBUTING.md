@@ -34,16 +34,33 @@ Pass flags with `ARGS`, for example `make run ARGS="--seed 7"`.
 
 A game bundle is one directory with `config.yaml`, `rulebook.yaml`, and
 `story.ink`. A precompiled `story.ink.json` works in place of the source. An
-optional `cover.png` shows above the title in terminals with a graphics
-protocol.
+optional `cover.png` opens the game on a cover screen.
 
-In a terminal, `oink run` prints each scene and waits at a `>` prompt. Press a
-key from 1 to 9 to pick a choice, or click the choice line. Press Esc, q, or
-Ctrl-C to quit. While the player waits, it captures the mouse, so plain drag
+In a terminal, `oink run` takes the whole window. The scene text sits in a
+centered column, the dice checks and the character notices follow it, and the
+choices come after one blank line. When the text does not fit, it scrolls and
+the choices stay at the bottom. The bottom bar shows the resources, the active
+conditions, the level, and the keys.
+
+Press a key from 1 to 9 to pick a choice at once. Move the highlight with the
+arrow keys, or with j and k, and press Enter to take it. Click a choice to pick
+it. Scroll long text with PageUp, PageDown, Home, End, or the mouse wheel.
+Press Esc, q, or Ctrl-C to quit. The player captures the mouse, so plain drag
 selection does not work. Hold Shift while you drag to select text.
 
-When stdin or stdout is not a terminal, the player reads one number per line
-from stdin and shows no pictures:
+The player uses the 16 colors of the terminal palette, so it follows your
+theme. If `NO_COLOR` is set to a non-empty value, the player keeps bold,
+italic, and dim text and drops the colors. Terminals that speak the Kitty,
+iTerm2, or Sixel graphics protocol show the cover as a picture. Other
+terminals draw it with Unicode half blocks.
+
+Story text can carry emphasis markup: `**bold**`, `*italic*`, and `_italic_`.
+The [Ink API reference](docs/reference/ink-api.md#emphasis-in-prose) has the
+rules.
+
+When stdin or stdout is not a terminal, or when you pass `--plain`, the player
+prints each scene as a transcript without markup and waits at a `>` prompt.
+Type a number and press Enter to pick a choice, or type q to quit:
 
 ```sh
 printf '1\n1\n' | oink run examples/high-pass

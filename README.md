@@ -49,10 +49,11 @@ make test   # the engine walks the test story in milliseconds
 ```
 
 `make run` builds the `oink` command and runs `oink run examples/high-pass`.
-Press a key from 1 to 9 or click a choice to pick it. Press Esc or q to quit.
-Terminals that speak the Kitty, iTerm2, or Sixel graphics protocol (WezTerm,
-Kitty, Ghostty, iTerm2, foot) show game pictures inline. Other terminals get
-the text only.
+The game opens full screen in your terminal. Press a key from 1 to 9, move with
+the arrow keys and press Enter, or click a choice to pick it. Press Esc or q to
+quit. Terminals that speak the Kitty, iTerm2, or Sixel graphics protocol
+(WezTerm, Kitty, Ghostty, iTerm2, foot) show the cover as a picture. Other
+terminals draw it with Unicode half blocks.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full command list and the
 flags that make `oink run` scriptable.

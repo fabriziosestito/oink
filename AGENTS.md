@@ -36,9 +36,12 @@ These were deliberate choices. Do not revisit them without a strong reason.
 
 3. **No emulator; players instead.**
    - There is no M5Paper emulator. The desktop test bed is the terminal
-     player, `oink run` in `oink-cli`: it prints the transcript, takes keys
-     and mouse clicks, and shows pictures through the Kitty, iTerm2, or
-     Sixel graphics protocol (`viuer`). No SDL, no system dependencies.
+     player, `oink run` in `oink-cli`. In a terminal it draws a full-screen
+     page with `ratatui`: prose column, check records and notices, choices,
+     and a status bar. It takes keys and mouse clicks and shows the cover
+     through `ratatui-image` (Kitty, iTerm2, Sixel, or Unicode half blocks).
+     Pipes, `--choices`, and `--plain` get a plain transcript instead.
+     No SDL, no system dependencies.
    - Each player is its own crate with its own binary. Device players go
      under `players/` when they exist (M5Paper first), because they need
      their own toolchains and cannot share one crate with the CLI.
@@ -92,10 +95,19 @@ oink/
 │       └── state.rs     # Character state and change events
 ├── oink-cli/            # the `oink` command: `run` plays a bundle in the terminal
 │   ├── src/
-│   │   ├── main.rs      # clap: oink run <BUNDLE_DIR> [--seed N] [--choices 1,3,2]
+│   │   ├── main.rs      # clap: oink run <BUNDLE_DIR> [--seed N] [--choices 1,3,2] [--plain]
 │   │   ├── bundle.rs    # reads config.yaml, rulebook.yaml, story.ink[.json], cover.png
-│   │   ├── player.rs    # transcript, keys 1-9, mouse clicks, stdin lines, scripted picks
-│   │   └── image.rs     # pictures through viuer (Kitty, iTerm2, Sixel)
+│   │   ├── game.rs      # engine setup shared by both players, THE_END line
+│   │   ├── markup.rs    # emphasis markup in prose: **bold**, *italic*, _italic_
+│   │   ├── wrap.rs      # word wrap over styled fragments
+│   │   ├── player.rs    # the transcript: stdin lines and scripted picks, --plain
+│   │   ├── cover.rs     # the cover picture through ratatui-image
+│   │   └── tui/         # the full-screen player (ratatui)
+│   │       ├── mod.rs   # event loop, key and mouse mapping, terminal setup
+│   │       ├── app.rs   # state: page, highlight, scroll, status, actions
+│   │       ├── view.rs  # layout: header, prose column, choices, status bar
+│   │       ├── text.rs  # styled lines for prose, checks, notices, choices
+│   │       └── theme.rs # semantic styles from the 16-color palette, NO_COLOR
 │   └── tests/
 │       ├── run.rs       # plays examples/high-pass through the binary
 │       └── docs.rs      # runs the Ink examples in docs/ against the demo rulebook
@@ -157,6 +169,13 @@ section updated as the single source of truth):
 happens in `oink-core` today (see roadmap). `bladeink` exposes tags
 (`Story::get_current_tags`, `Choice::tags`) so no runtime change is needed.
 
+Inline emphasis is part of the scene format too: `**bold**`, `*italic*`, and
+`_italic_` in prose and choice text, with the opening and closing rules in
+[docs/reference/ink-api.md](docs/reference/ink-api.md#emphasis-in-prose).
+The parser lives in `oink-cli/src/markup.rs` and the engine passes text
+through unchanged. Move the parser to `oink-core` when a second player
+needs it.
+
 External functions are bound by `oink-core` (inventory, perks, conditions,
 tags, checks, environments, resources; see the Engine API list). The writer calls
 `end_scene()` once per scene boundary to advance timed conditions. Choices,
@@ -185,8 +204,8 @@ theme, and deployment.
 - Keep `oink-core` free of any display/IO concerns — it must stay
   `cargo test`-able on the host and eventually embedded-friendly.
 - Device rendering goes through `embedded_graphics::DrawTarget`; never code
-  against the IT8951 directly in shared code. The terminal player prints
-  text and does not use `embedded-graphics`.
+  against the IT8951 directly in shared code. The terminal player draws with
+  `ratatui` and does not use `embedded-graphics`.
 - Players are binaries, not libraries. Shared host code (bundle loading, a
   layout for e-ink) gets extracted only when a second player needs it.
 - The demo game lives in `examples/high-pass/`; `assets/` holds branding
@@ -216,8 +235,13 @@ theme, and deployment.
 
 ## Roadmap / open items
 
-- [x] Terminal player: `oink run` with keys, mouse, inline pictures, and
+- [x] Terminal player: `oink run` with keys, mouse, the cover picture, and
       the `--seed` and `--choices` flags for CI.
+- [x] Full-screen ratatui page: styled checks and notices, a status bar
+      with resources, conditions, and level, emphasis markup in prose,
+      `--plain` for the transcript.
+- [ ] Terminal player extras: a character sheet panel, a help overlay, and
+      a journal of past scenes.
 - [ ] `players/m5paper` firmware crate (esp-idf, it8951, GT911 touch, SD/flash
       bundle loading; espup toolchain).
 - [ ] A cover picture for `examples/high-pass` (`cover.png`).

@@ -1,8 +1,12 @@
 //! `oink`: play a game bundle in the terminal.
 
 mod bundle;
-mod image;
+mod cover;
+mod game;
+mod markup;
 mod player;
+mod tui;
+mod wrap;
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -24,8 +28,10 @@ struct Cli {
 enum Command {
     /// Play a game bundle in the terminal.
     ///
-    /// In a terminal, keys 1 to 9 and mouse clicks pick a choice; Esc or q
-    /// quits. When stdin or stdout is a pipe, picks are read one per line.
+    /// In a terminal the game opens full screen: keys 1 to 9, the arrow
+    /// keys with Enter, or a mouse click pick a choice, and Esc or q quits.
+    /// When stdin or stdout is a pipe, or with --plain, the scenes print as
+    /// a transcript and picks are read one per line.
     Run(RunArgs),
 }
 
@@ -40,6 +46,9 @@ struct RunArgs {
     /// Picks are numbered from 1 and the run stops when they run out.
     #[arg(long, value_delimiter = ',', value_name = "N,N,...")]
     choices: Option<Vec<usize>>,
+    /// Print the transcript instead of the full-screen player.
+    #[arg(long)]
+    plain: bool,
 }
 
 fn main() -> ExitCode {
@@ -70,6 +79,7 @@ fn run(args: RunArgs) -> Result<(), Box<dyn Error>> {
     let options = Options {
         seed: args.seed,
         choices,
+        plain: args.plain,
     };
     player::play(&bundle, options, &mut std::io::stdout())
 }
