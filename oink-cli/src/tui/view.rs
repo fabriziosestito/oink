@@ -11,6 +11,7 @@ use ratatui::Frame;
 
 use crate::cover::Cover;
 use crate::game::THE_END;
+use crate::wrap;
 
 use super::app::{App, Screen};
 use super::text;
@@ -26,6 +27,7 @@ const MIN_PROSE_ROWS: u16 = 3;
 pub fn draw(frame: &mut Frame, app: &mut App, theme: &Theme, cover: Option<&mut Cover>) {
     let area = frame.area();
     if area.height < 6 || area.width < 2 * MARGIN + 4 {
+        app.choice_areas.clear();
         frame.render_widget(Paragraph::new("Window too small").style(theme.hint), area);
         return;
     }
@@ -119,7 +121,9 @@ fn draw_page(frame: &mut Frame, column: Rect, body: Rect, app: &mut App, theme: 
     let mut lines = text::page_lines(&app.page, width, theme);
     if app.screen == Screen::End {
         lines.push(Line::default());
-        lines.push(Line::styled(THE_END.to_string(), theme.the_end).centered());
+        for line in wrap::wrap_plain(THE_END, width) {
+            lines.push(Line::styled(line, theme.the_end).centered());
+        }
     }
     let choices: Vec<Vec<Line<'static>>> = app
         .page
@@ -288,14 +292,36 @@ mod tests {
     }
 
     #[test]
+    fn an_oversized_word_expands_scrolling_and_choice_rows() {
+        let mut app = app();
+        app.page.paragraphs = vec![markup::parse(&"x".repeat(200))];
+        app.page.choices = vec![markup::parse(&"y".repeat(50)), markup::parse("ok")];
+        let buffer = render(&mut app, 40, 12);
+        assert_eq!(app.max_scroll, 2, "the split word counts toward scrolling");
+        assert_eq!(app.choice_areas[0].height, 2, "the split choice wraps");
+        assert_eq!(app.choice_areas[1].height, 1);
+        let rows = lines_of(&buffer);
+        assert!(rows[2].contains("xxxx"), "{rows:?}");
+        assert!(rows.iter().any(|r| r.contains("yyyy")), "{rows:?}");
+    }
+
+    #[test]
     fn the_ending_shows_the_house_line() {
         let mut app = app();
         app.update(Action::Pick(1)).unwrap();
         assert_eq!(app.screen, Screen::End);
-        let buffer = render(&mut app, 60, 12);
+        let buffer = render(&mut app, 40, 12);
         let rows = lines_of(&buffer);
         assert!(rows.iter().any(|r| r.trim() == "You leave."), "{rows:?}");
-        assert!(rows.iter().any(|r| r.trim() == THE_END), "{rows:?}");
+        let width = (40 - 2 * MARGIN) as usize;
+        let ending = wrap::wrap_plain(THE_END, width);
+        assert!(ending.len() > 1, "the house line wraps at this width");
+        for line in ending {
+            assert!(
+                rows.iter().any(|r| r.trim() == line),
+                "{line:?} missing from {rows:?}"
+            );
+        }
         assert!(app.choice_areas.is_empty());
         assert!(rows[11].ends_with("Enter close"), "{rows:?}");
     }
@@ -303,7 +329,13 @@ mod tests {
     #[test]
     fn a_tiny_window_shows_a_hint_instead_of_panicking() {
         let mut app = app();
-        let buffer = render(&mut app, 20, 4);
+        render(&mut app, 60, 16);
+        assert_eq!(app.choice_areas.len(), 2, "the big window records choices");
+        let buffer = render(&mut app, 60, 5);
         assert!(row(&buffer, 0).contains("Window too small"));
+        assert!(
+            app.choice_areas.is_empty(),
+            "stale click targets must not survive the resize"
+        );
     }
 }
