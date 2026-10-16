@@ -128,13 +128,14 @@ fn can_close(before: Option<char>, after: Option<char>, underscore: bool) -> boo
     ends_text && word_boundary
 }
 
-/// Pair each closer with the nearest open marker of its kind. Markers left
-/// open in between become literal text.
+/// Pair each closer with the nearest open marker of its kind and delimiter.
+/// Markers left open in between become literal text.
 fn match_markers(tokens: &mut [Token]) {
-    let mut open: Vec<(usize, Kind)> = Vec::new();
+    let mut open: Vec<(usize, Kind, bool)> = Vec::new();
     for index in 0..tokens.len() {
         let Token::Marker {
             kind,
+            underscore,
             can_open,
             can_close,
             ..
@@ -143,18 +144,20 @@ fn match_markers(tokens: &mut [Token]) {
             continue;
         };
         let opener = if can_close {
-            open.iter().rposition(|&(_, open_kind)| open_kind == kind)
+            open.iter().rposition(|&(_, open_kind, open_underscore)| {
+                open_kind == kind && open_underscore == underscore
+            })
         } else {
             None
         };
         match opener {
             Some(position) => {
-                let (opener_index, _) = open[position];
+                let (opener_index, _, _) = open[position];
                 open.truncate(position);
                 set_matched(&mut tokens[opener_index], true);
                 set_matched(&mut tokens[index], false);
             }
-            None if can_open => open.push((index, kind)),
+            None if can_open => open.push((index, kind, underscore)),
             None => {}
         }
     }
@@ -275,6 +278,14 @@ mod tests {
         assert_eq!(parse("a ** b"), vec![run("a ** b", PLAIN)]);
         assert_eq!(parse("****"), vec![run("****", PLAIN)]);
         assert_eq!(parse("__init__"), vec![run("__init__", PLAIN)]);
+    }
+
+    #[test]
+    fn markers_pair_only_with_their_own_delimiter() {
+        assert_eq!(parse("*word_"), vec![run("*word_", PLAIN)]);
+        assert_eq!(parse("_word*"), vec![run("_word*", PLAIN)]);
+        assert_eq!(plain("*word_"), "*word_");
+        assert_eq!(plain("_word*"), "_word*");
     }
 
     #[test]
