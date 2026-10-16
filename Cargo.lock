@@ -1050,6 +1050,7 @@ dependencies = [
  "oink-core",
  "ratatui",
  "ratatui-image",
+ "unicode-width",
 ]
 
 [[package]]

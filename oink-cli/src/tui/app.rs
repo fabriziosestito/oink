@@ -131,7 +131,11 @@ impl App {
         match self.screen {
             Screen::Cover => {
                 if matches!(action, Action::Confirm | Action::Click(_)) {
-                    self.screen = Screen::Page;
+                    self.screen = if self.page.choices.is_empty() {
+                        Screen::End
+                    } else {
+                        Screen::Page
+                    };
                 }
             }
             Screen::End => match action {
@@ -393,6 +397,20 @@ Inside.
         app.update(Action::Click(Position::new(3, 3))).unwrap();
         assert_eq!(app.screen, Screen::Page);
         assert_eq!(app.page.choices.len(), 2, "the click picks nothing yet");
+    }
+
+    #[test]
+    fn an_ending_during_start_survives_the_cover() {
+        let data = GameData::from_yaml("title: Têst", RULEBOOK).unwrap();
+        let engine = Engine::new("The pass is closed.\n-> END\n", data).unwrap();
+        let mut app = App::new(engine, true).unwrap();
+        assert_eq!(app.screen, Screen::Cover);
+        assert!(app.page.choices.is_empty());
+        app.update(Action::Confirm).unwrap();
+        assert_eq!(app.screen, Screen::End);
+        assert!(!app.quit);
+        app.update(Action::Confirm).unwrap();
+        assert!(app.quit);
     }
 
     #[test]
