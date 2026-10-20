@@ -16,6 +16,9 @@ oink-cli
   -> oink-core
        -> bladeink / bladeink-compiler
        -> oink-rulebook
+
+oink-ui
+  -> embedded-graphics
 ```
 
 `oink-rulebook` defines YAML models, validation, character operations,
@@ -46,10 +49,14 @@ The emphasis markup in story and choice text, `**bold**`, `*italic*`, and
 [Ink API reference](reference/ink-api.md#emphasis-in-prose). The engine passes
 the text through unchanged, and every player applies the same parser.
 
+`oink-ui` is the shared reader layout for device players. It owns the three
+zones, the pager, and the sheet, inventory, and log views. It draws through
+`embedded-graphics` `DrawTarget` and has no file, network, or terminal access.
+Ports supply screen metrics, input events, and storage.
+
 Each player is a separate crate with its own binary. Device players will live
-under `players/`, with the M5Paper first. Device rendering goes through the
-`embedded-graphics` `DrawTarget` trait. The terminal player draws with ratatui
-and does not use it.
+under `players/`, with the M5Paper first. Their shared layout is `oink-ui`.
+The terminal player draws with ratatui and does not use it.
 
 ## Fixed definitions and live state
 

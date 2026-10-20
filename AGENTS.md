@@ -46,7 +46,9 @@ These were deliberate choices. Do not revisit them without a strong reason.
      under `players/` when they exist (M5Paper first), because they need
      their own toolchains and cannot share one crate with the CLI.
    - Device rendering goes through `embedded-graphics`'s `DrawTarget` trait.
-     On device the target is the IT8951 e-ink driver (`it8951` crate).
+     The shared device layout lives in `oink-ui`; the terminal player does
+     not use it.
+   - On device the target is the IT8951 e-ink driver (`it8951` crate).
    - The engine core is a plain Rust crate, unit-testable with `cargo test` —
      faster iteration than any emulator.
 
@@ -84,6 +86,15 @@ oink/
 │   │   ├── external.rs  # external function bindings
 │   │   └── markup.rs    # emphasis markup shared by players
 │   └── tests/fixtures/  # synthetic config, rulebook, and story for tests
+├── oink-ui/             # shared reader layout for e-ink device players
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── metrics.rs   # screen measurements
+│   │   ├── layout.rs    # top, center, and bottom zones
+│   │   ├── theme.rs     # Gray4 palette
+│   │   ├── input.rs     # actions, views, and focus
+│   │   └── render.rs    # empty reader drawing
+│   └── tests/           # Gray4 framebuffer and PGM snapshots
 ├── oink-rulebook/       # rulebook crate: checks, modifiers, resources, character state
 │   └── src/
 │       ├── lib.rs
