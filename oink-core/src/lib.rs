@@ -6,6 +6,7 @@
 pub mod data;
 pub mod engine;
 mod external;
+pub mod markup;
 
 pub use engine::{CheckRecord, Choice, Engine, EngineError, Event};
 pub use oink_rulebook;

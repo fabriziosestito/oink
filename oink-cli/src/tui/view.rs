@@ -201,9 +201,9 @@ fn row_count(count: usize) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::markup;
     use crate::tui::app::tests::app;
     use crate::tui::app::Action;
+    use oink_core::markup;
     use ratatui::backend::TestBackend;
     use ratatui::buffer::Buffer;
     use ratatui::style::Modifier;

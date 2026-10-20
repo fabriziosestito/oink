@@ -1,12 +1,12 @@
 //! Styled lines for the view: prose, checks, notices, choices, and the
 //! status bar. Everything here is a pure function of the data and the theme.
 
+use oink_core::markup::Run;
 use oink_core::oink_rulebook::RollKind;
 use oink_core::CheckRecord;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use crate::markup::Run;
 use crate::wrap;
 
 use super::app::{Notice, NoticeKind, Page, Status};
@@ -253,8 +253,8 @@ fn wrap_lines(pieces: &[(&str, Style)], width: usize) -> Vec<Line<'static>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::markup;
     use crate::tui::app::ResourceStatus;
+    use oink_core::markup;
     use oink_core::oink_rulebook::{Breakdown, DiceRoll};
 
     fn text(line: &Line<'_>) -> String {

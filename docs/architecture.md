@@ -41,11 +41,10 @@ When stdin or stdout is not a terminal, or with `--plain`, the player prints a
 transcript and reads one pick per line.
 The `--seed` and `--choices` flags make a run repeatable without input.
 
-The player parses the emphasis markup in story and choice text, `**bold**`,
-`*italic*`, and `_italic_`, as described in the
+The emphasis markup in story and choice text, `**bold**`, `*italic*`, and
+`_italic_`, is parsed in `oink-core/src/markup.rs`, as described in the
 [Ink API reference](reference/ink-api.md#emphasis-in-prose). The engine passes
-the text through unchanged, so the markup is a player concern until a second
-player needs it.
+the text through unchanged, and every player applies the same parser.
 
 Each player is a separate crate with its own binary. Device players will live
 under `players/`, with the M5Paper first. Device rendering goes through the

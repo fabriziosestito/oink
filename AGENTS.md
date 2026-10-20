@@ -80,7 +80,9 @@ oink/
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── data.rs      # Config, GameData (rulebook-backed)
-│   │   └── engine.rs    # Engine, Event, Choice, external bindings + tests
+│   │   ├── engine.rs    # Engine, Event, Choice + tests
+│   │   ├── external.rs  # external function bindings
+│   │   └── markup.rs    # emphasis markup shared by players
 │   └── tests/fixtures/  # synthetic config, rulebook, and story for tests
 ├── oink-rulebook/       # rulebook crate: checks, modifiers, resources, character state
 │   └── src/
@@ -172,9 +174,8 @@ happens in `oink-core` today (see roadmap). `bladeink` exposes tags
 Inline emphasis is part of the scene format too: `**bold**`, `*italic*`, and
 `_italic_` in prose and choice text, with the opening and closing rules in
 [docs/reference/ink-api.md](docs/reference/ink-api.md#emphasis-in-prose).
-The parser lives in `oink-cli/src/markup.rs` and the engine passes text
-through unchanged. Move the parser to `oink-core` when a second player
-needs it.
+The parser lives in `oink-core/src/markup.rs` and every player shares it. The
+engine passes text through unchanged.
 
 External functions are bound by `oink-core` (inventory, perks, conditions,
 tags, checks, environments, resources; see the Engine API list). The writer calls

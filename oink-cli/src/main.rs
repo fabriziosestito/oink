@@ -3,7 +3,6 @@
 mod bundle;
 mod cover;
 mod game;
-mod markup;
 mod player;
 mod tui;
 mod wrap;

@@ -3,11 +3,10 @@
 //! event loop turns terminal events into `Action`s and the view reads the
 //! state back.
 
+use oink_core::markup::{self, Run};
 use oink_core::oink_rulebook::{Rulebook, StateChange};
 use oink_core::{CheckRecord, Engine, EngineError, Event};
 use ratatui::layout::{Position, Rect};
-
-use crate::markup::{self, Run};
 
 /// Which screen is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
