@@ -12,6 +12,7 @@ use std::io;
 
 use image::DynamicImage;
 use oink_core::Engine;
+use oink_ui::{StatusConfig, UiConfig};
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyEvent,
     KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -33,6 +34,14 @@ const WHEEL_ROWS: u16 = 3;
 /// ending, the house line stays on the terminal.
 pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     let engine = game::load(bundle, seed)?;
+    let ui = match bundle.ui() {
+        Some(yaml) => {
+            let ui = UiConfig::from_yaml(yaml)?;
+            ui.validate(&engine.data.rulebook)?;
+            ui
+        }
+        None => UiConfig::default(),
+    };
     let picture = bundle.cover().and_then(|path| match image::open(&path) {
         Ok(picture) => Some(picture),
         Err(error) => {
@@ -40,7 +49,7 @@ pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
             None
         }
     });
-    let theme = Theme::detect();
+    let theme = Theme::from_config(&ui.theme.terminal);
 
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -48,7 +57,7 @@ pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
         hook(info);
     }));
     let mut terminal = ratatui::init();
-    let result = play(&mut terminal, engine, picture, &theme);
+    let result = play(&mut terminal, engine, ui.status, picture, &theme);
     ratatui::restore();
     drop(terminal);
 
@@ -62,12 +71,13 @@ pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
 fn play(
     terminal: &mut DefaultTerminal,
     engine: Engine,
+    status: StatusConfig,
     picture: Option<DynamicImage>,
     theme: &Theme,
 ) -> Result<bool, Box<dyn Error>> {
     let _mouse = MouseCapture::enable()?;
     let mut cover = picture.map(Cover::new);
-    let mut app = App::new(engine, cover.is_some())?;
+    let mut app = App::new(engine, cover.is_some(), status)?;
     while !app.quit {
         terminal.draw(|frame| view::draw(frame, &mut app, theme, cover.as_mut()))?;
         if let Some(action) = action(event::read()?) {

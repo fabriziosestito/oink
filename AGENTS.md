@@ -21,7 +21,9 @@ These were deliberate choices. Do not revisit them without a strong reason.
    - Rule definitions and starting character: **YAML** (`rulebook.yaml`).
      The game title lives in `config.yaml`.
    - A game bundle is one directory with those three fixed file names.
-     The demo game is `examples/high-pass/`.
+     An optional `ui.yaml` sets presentation: reader page sizes, the
+     status bar, and the e-ink and terminal palettes. The engine never
+     reads it. The demo game is `examples/high-pass/`.
    - Checks use configurable dice profiles from YAML. The default profile rolls
      2d6 over with margin degrees and passive 6. Profiles can use d2 through
      d20 and d%, roll over or under, and define their own outcome table.
@@ -46,7 +48,9 @@ These were deliberate choices. Do not revisit them without a strong reason.
      under `players/` when they exist (M5Paper first), because they need
      their own toolchains and cannot share one crate with the CLI.
    - Device rendering goes through `embedded-graphics`'s `DrawTarget` trait.
-     On device the target is the IT8951 e-ink driver (`it8951` crate).
+     The shared device layout lives in `oink-ui`; the terminal player uses
+     only its `config` module and draws with ratatui.
+   - On device the target is the IT8951 e-ink driver (`it8951` crate).
    - The engine core is a plain Rust crate, unit-testable with `cargo test` —
      faster iteration than any emulator.
 
@@ -73,15 +77,27 @@ oink/
 ├── Makefile             # build / run / test / check / fmt / lint / docs / clean / m5paper
 ├── documentation.md    # entry point to user documentation
 ├── docs/index.md       # documentation navigation
-├── docs/reference/     # YAML, checks, state, Ink API, and Rust API
+├── docs/reference/     # YAML, checks, state, Ink API, Rust API, and UI config
 ├── docs/architecture.md # current crate boundaries and runtime ownership
 ├── website/             # Docusaurus site: theme and build config
 ├── oink-core/           # engine core: Ink runtime wrapper + YAML data model
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── data.rs      # Config, GameData (rulebook-backed)
-│   │   └── engine.rs    # Engine, Event, Choice, external bindings + tests
+│   │   ├── engine.rs    # Engine, Event, Choice + tests
+│   │   ├── external.rs  # external function bindings
+│   │   └── markup.rs    # emphasis markup shared by players
 │   └── tests/fixtures/  # synthetic config, rulebook, and story for tests
+├── oink-ui/             # shared reader layout and UI config for device players
+│   ├── src/             # `config` always builds; drawing needs the `render` feature
+│   │   ├── lib.rs
+│   │   ├── config.rs    # optional ui.yaml schema, defaults, validation
+│   │   ├── metrics.rs   # screen measurements
+│   │   ├── layout.rs    # top, center, and bottom zones
+│   │   ├── theme.rs     # Gray4 palette
+│   │   ├── input.rs     # actions, views, and focus
+│   │   └── render.rs    # empty reader drawing
+│   └── tests/           # Gray4 framebuffer and PGM snapshots
 ├── oink-rulebook/       # rulebook crate: checks, modifiers, resources, character state
 │   └── src/
 │       ├── lib.rs
@@ -96,7 +112,7 @@ oink/
 ├── oink-cli/            # the `oink` command: `run` plays a bundle in the terminal
 │   ├── src/
 │   │   ├── main.rs      # clap: oink run <BUNDLE_DIR> [--seed N] [--choices 1,3,2] [--plain]
-│   │   ├── bundle.rs    # reads config.yaml, rulebook.yaml, story.ink[.json], cover.png
+│   │   ├── bundle.rs    # reads config.yaml, rulebook.yaml, story.ink[.json], cover.png, ui.yaml
 │   │   ├── game.rs      # engine setup shared by both players, THE_END line
 │   │   ├── markup.rs    # emphasis markup in prose: **bold**, *italic*, _italic_
 │   │   ├── wrap.rs      # word wrap over styled fragments
@@ -172,9 +188,8 @@ happens in `oink-core` today (see roadmap). `bladeink` exposes tags
 Inline emphasis is part of the scene format too: `**bold**`, `*italic*`, and
 `_italic_` in prose and choice text, with the opening and closing rules in
 [docs/reference/ink-api.md](docs/reference/ink-api.md#emphasis-in-prose).
-The parser lives in `oink-cli/src/markup.rs` and the engine passes text
-through unchanged. Move the parser to `oink-core` when a second player
-needs it.
+The parser lives in `oink-core/src/markup.rs` and every player shares it. The
+engine passes text through unchanged.
 
 External functions are bound by `oink-core` (inventory, perks, conditions,
 tags, checks, environments, resources; see the Engine API list). The writer calls
@@ -203,6 +218,8 @@ theme, and deployment.
 - Rust 2021 edition, workspace-level shared dependencies.
 - Keep `oink-core` free of any display/IO concerns — it must stay
   `cargo test`-able on the host and eventually embedded-friendly.
+- Presentation settings live in `oink-ui::config` and the optional `ui.yaml`.
+  Players read them; `oink-core` never does.
 - Device rendering goes through `embedded_graphics::DrawTarget`; never code
   against the IT8951 directly in shared code. The terminal player draws with
   `ratatui` and does not use `embedded-graphics`.
@@ -240,6 +257,8 @@ theme, and deployment.
 - [x] Full-screen ratatui page: styled checks and notices, a status bar
       with resources, conditions, and level, emphasis markup in prose,
       `--plain` for the transcript.
+- [x] Optional `ui.yaml`: reader page sizes, sheet order, top bar, status
+      bar, and palettes. Parsed by `oink-ui::config`, never by `oink-core`.
 - [ ] Terminal player extras: a character sheet panel, a help overlay, and
       a journal of past scenes.
 - [ ] `players/m5paper` firmware crate (esp-idf, it8951, GT911 touch, SD/flash

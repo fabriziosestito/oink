@@ -19,6 +19,7 @@ so APIs can change. Future designs live in GitHub issues.
 - Read [checks and modifiers](reference/checks.md) for the 2d6 calculation.
 - Read [character state](reference/state.md) for inventory, conditions, and scene boundaries.
 - Use the [Ink API](reference/ink-api.md) to connect a story to the rules.
+- Read [UI configuration](reference/ui.md) to set the status bar, page sizes, and theme.
 
 ## For application developers
 

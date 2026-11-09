@@ -16,6 +16,11 @@ oink-cli
   -> oink-core
        -> bladeink / bladeink-compiler
        -> oink-rulebook
+  -> oink-ui (config only, no renderer)
+
+oink-ui
+  -> oink-core (rulebook ids in ui.yaml)
+  -> embedded-graphics (optional, `render` feature)
 ```
 
 `oink-rulebook` defines YAML models, validation, character operations,
@@ -30,7 +35,8 @@ Rulebook operations perform the character mutations.
 `oink-cli` is the first player. It builds the `oink` command, whose `run`
 subcommand reads a game bundle from disk and plays it in the terminal.
 A bundle is one directory with `config.yaml`, `rulebook.yaml`, and `story.ink`
-or a precompiled `story.ink.json`, plus an optional `cover.png`.
+or a precompiled `story.ink.json`, plus an optional `cover.png` and an optional
+`ui.yaml`.
 In a terminal the player draws a full-screen page with ratatui: the prose in a
 centered column, the check records and state notices under it, the choices
 below, and a status bar with the character resources, conditions, and level.
@@ -41,16 +47,28 @@ When stdin or stdout is not a terminal, or with `--plain`, the player prints a
 transcript and reads one pick per line.
 The `--seed` and `--choices` flags make a run repeatable without input.
 
-The player parses the emphasis markup in story and choice text, `**bold**`,
-`*italic*`, and `_italic_`, as described in the
+The emphasis markup in story and choice text, `**bold**`, `*italic*`, and
+`_italic_`, is parsed in `oink-core/src/markup.rs`, as described in the
 [Ink API reference](reference/ink-api.md#emphasis-in-prose). The engine passes
-the text through unchanged, so the markup is a player concern until a second
-player needs it.
+the text through unchanged, and every player applies the same parser.
+
+`oink-ui` is the shared reader layout for device players. It owns the three
+zones, the pager, and the sheet, inventory, and log views. It draws through
+`embedded-graphics` `DrawTarget` and has no file, network, or terminal access.
+Ports supply screen metrics, input events, and storage.
+
+The `oink-ui::config` module is always compiled. It parses the optional
+`ui.yaml` into page sizes, sheet order, top-bar values, status settings, and
+palettes. It validates the rulebook ids and other references. The drawing
+modules sit behind the default `render` feature, so a player that needs only
+the presentation settings can use `oink-ui` without `embedded-graphics`.
+The terminal player does that: it reads the status and terminal theme blocks
+and draws with ratatui. `oink-core` never reads `ui.yaml`.
+See the [UI configuration reference](reference/ui.md).
 
 Each player is a separate crate with its own binary. Device players will live
-under `players/`, with the M5Paper first. Device rendering goes through the
-`embedded-graphics` `DrawTarget` trait. The terminal player draws with ratatui
-and does not use it.
+under `players/`, with the M5Paper first. Their shared layout is `oink-ui`.
+The terminal player draws with ratatui and uses only the `config` module.
 
 ## Fixed definitions and live state
 

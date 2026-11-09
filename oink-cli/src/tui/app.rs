@@ -3,11 +3,11 @@
 //! event loop turns terminal events into `Action`s and the view reads the
 //! state back.
 
-use oink_core::oink_rulebook::{Rulebook, StateChange};
+use oink_core::markup::{self, Run};
+use oink_core::oink_rulebook::{Character, Rulebook, StateChange};
 use oink_core::{CheckRecord, Engine, EngineError, Event};
+use oink_ui::StatusConfig;
 use ratatui::layout::{Position, Rect};
-
-use crate::markup::{self, Run};
 
 /// Which screen is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,12 +96,17 @@ pub struct App {
     /// Where each choice was drawn, set by the view on every draw.
     pub choice_areas: Vec<Rect>,
     pub quit: bool,
+    status_config: StatusConfig,
     engine: Engine,
 }
 
 impl App {
     /// Start the story. With a cover the player opens on the cover screen.
-    pub fn new(mut engine: Engine, has_cover: bool) -> Result<Self, EngineError> {
+    pub fn new(
+        mut engine: Engine,
+        has_cover: bool,
+        status_config: StatusConfig,
+    ) -> Result<Self, EngineError> {
         let event = engine.start()?;
         let mut app = Self {
             title: engine.data.config.title.clone(),
@@ -114,6 +119,7 @@ impl App {
             viewport: 0,
             choice_areas: Vec::new(),
             quit: false,
+            status_config,
             engine,
         };
         app.show(event);
@@ -215,7 +221,7 @@ impl App {
             notices,
             choices: choices.iter().map(|c| markup::parse(&c.text)).collect(),
         };
-        self.status = status(&self.engine);
+        self.status = status(&self.engine, &self.status_config);
         self.screen = screen;
         self.selected = 0;
         self.scroll = 0;
@@ -223,27 +229,47 @@ impl App {
     }
 }
 
-fn status(engine: &Engine) -> Status {
+fn status(engine: &Engine, config: &StatusConfig) -> Status {
     let rulebook = &engine.data.rulebook;
     let character = engine.character();
-    Status {
-        resources: rulebook
-            .resources
+    let resources = match &config.resources {
+        Some(ids) => ids
             .iter()
-            .filter_map(|(id, resource)| {
-                character.resource(id).map(|value| ResourceStatus {
-                    name: resource.name.clone(),
-                    value,
-                    max: character.resource_max(rulebook, id),
-                })
-            })
+            .filter_map(|id| resource_status(rulebook, &character, id))
             .collect(),
-        conditions: character
+        None => rulebook
+            .resources
+            .keys()
+            .filter_map(|id| resource_status(rulebook, &character, id))
+            .collect(),
+    };
+    let conditions = if config.show_conditions.unwrap_or(true) {
+        character
             .condition_ids()
             .map(|id| name(rulebook.conditions.get(id).map(|c| c.name.as_str()), id))
-            .collect(),
-        level: rulebook.levelling.as_ref().map(|_| character.level()),
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let level = if config.show_level.unwrap_or(true) {
+        rulebook.levelling.as_ref().map(|_| character.level())
+    } else {
+        None
+    };
+    Status {
+        resources,
+        conditions,
+        level,
     }
+}
+
+fn resource_status(rulebook: &Rulebook, character: &Character, id: &str) -> Option<ResourceStatus> {
+    let resource = rulebook.resources.get(id)?;
+    character.resource(id).map(|value| ResourceStatus {
+        name: resource.name.clone(),
+        value,
+        max: character.resource_max(rulebook, id),
+    })
 }
 
 fn name(display: Option<&str>, id: &str) -> String {
@@ -360,7 +386,7 @@ Inside.
     }
 
     pub(crate) fn app() -> App {
-        App::new(engine(), false).unwrap()
+        App::new(engine(), false, StatusConfig::default()).unwrap()
     }
 
     #[test]
@@ -385,15 +411,43 @@ Inside.
     }
 
     #[test]
+    fn status_resources_follow_the_ui_config() {
+        let config = StatusConfig {
+            resources: Some(Vec::new()),
+            ..StatusConfig::default()
+        };
+        let app = App::new(engine(), false, config).unwrap();
+        assert!(app.status.resources.is_empty());
+
+        let config = StatusConfig {
+            resources: Some(vec!["health".to_string()]),
+            ..StatusConfig::default()
+        };
+        let app = App::new(engine(), false, config).unwrap();
+        assert_eq!(app.status.resources[0].name, "Health");
+    }
+
+    #[test]
+    fn status_conditions_follow_the_ui_config() {
+        let config = StatusConfig {
+            show_conditions: Some(false),
+            ..StatusConfig::default()
+        };
+        let mut app = App::new(engine(), false, config).unwrap();
+        app.update(Action::Pick(0)).unwrap();
+        assert!(app.status.conditions.is_empty());
+    }
+
+    #[test]
     fn a_cover_shows_first_and_confirm_or_a_click_leaves_it() {
-        let mut app = App::new(engine(), true).unwrap();
+        let mut app = App::new(engine(), true, StatusConfig::default()).unwrap();
         assert_eq!(app.screen, Screen::Cover);
         app.update(Action::Down).unwrap();
         assert_eq!(app.screen, Screen::Cover);
         app.update(Action::Confirm).unwrap();
         assert_eq!(app.screen, Screen::Page);
 
-        let mut app = App::new(engine(), true).unwrap();
+        let mut app = App::new(engine(), true, StatusConfig::default()).unwrap();
         app.update(Action::Click(Position::new(3, 3))).unwrap();
         assert_eq!(app.screen, Screen::Page);
         assert_eq!(app.page.choices.len(), 2, "the click picks nothing yet");
@@ -403,7 +457,7 @@ Inside.
     fn an_ending_during_start_survives_the_cover() {
         let data = GameData::from_yaml("title: Têst", RULEBOOK).unwrap();
         let engine = Engine::new("The pass is closed.\n-> END\n", data).unwrap();
-        let mut app = App::new(engine, true).unwrap();
+        let mut app = App::new(engine, true, StatusConfig::default()).unwrap();
         assert_eq!(app.screen, Screen::Cover);
         assert!(app.page.choices.is_empty());
         app.update(Action::Confirm).unwrap();
@@ -500,7 +554,7 @@ Inside.
 
     #[test]
     fn quit_works_on_every_screen() {
-        let mut app = App::new(engine(), true).unwrap();
+        let mut app = App::new(engine(), true, StatusConfig::default()).unwrap();
         app.update(Action::Quit).unwrap();
         assert!(app.quit);
     }

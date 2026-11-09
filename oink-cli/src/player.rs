@@ -6,13 +6,13 @@ use std::error::Error;
 use std::fmt;
 use std::io::{self, BufRead, IsTerminal, Write};
 
+use oink_core::markup;
 use oink_core::oink_rulebook::StateChange;
 use oink_core::{CheckRecord, Choice, Event};
 use ratatui::crossterm::terminal;
 
 use crate::bundle::Bundle;
 use crate::game::{self, THE_END};
-use crate::markup;
 use crate::tui;
 use crate::wrap::wrap_plain;
 
@@ -254,6 +254,7 @@ Inside.
             config: "title: Têst".to_string(),
             rulebook: RULEBOOK.to_string(),
             story: Story::Ink(STORY.to_string()),
+            ui: None,
         }
     }
 
