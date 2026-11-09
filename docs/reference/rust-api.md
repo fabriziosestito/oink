@@ -251,6 +251,26 @@ Errors include `UnknownSpell`, `UnknownDifficulty`, `UnknownResource`,
 dice sequence unchanged. Resolved casts pay even on failure.
 Direct Rust callers receive notices in `changes`; the engine binding queues them.
 
+## UI config
+
+`oink-ui` reads the optional presentation file and owns the shared reader
+layout. The `config` module has no renderer dependency and is always
+compiled. The drawing modules need the default `render` feature.
+
+```rust
+use oink_ui::UiConfig;
+
+let ui = UiConfig::from_yaml(yaml)?;
+ui.validate(&engine.data.rulebook)?;
+```
+
+`UiConfig::from_yaml` parses the file and checks its structure.
+`validate` checks the resource and characteristic ids against the rulebook.
+`UiConfig::default()` is the same as a missing or empty file.
+A device player reads `reader` and `theme.eink`; the terminal player reads
+`status` and `theme.terminal`. See the [UI configuration reference](ui.md)
+for the file format.
+
 ## Generated API reference
 
 Run `cargo doc --workspace --all-features --no-deps` to generate rustdoc for all

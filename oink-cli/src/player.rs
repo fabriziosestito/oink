@@ -254,6 +254,7 @@ Inside.
             config: "title: Têst".to_string(),
             rulebook: RULEBOOK.to_string(),
             story: Story::Ink(STORY.to_string()),
+            ui: None,
         }
     }
 

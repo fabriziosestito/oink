@@ -5,5 +5,12 @@ edition.workspace = true
 license.workspace = true
 description = "oink shared reader layout for e-ink players"
 
+[features]
+default = ["render"]
+render = ["dep:embedded-graphics"]
+
 [dependencies]
-embedded-graphics.workspace = true
+oink-core = { path = "../oink-core" }
+serde.workspace = true
+serde_yaml.workspace = true
+embedded-graphics = { workspace = true, optional = true }

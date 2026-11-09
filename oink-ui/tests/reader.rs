@@ -1,3 +1,5 @@
+#![cfg(feature = "render")]
+
 mod support;
 
 use oink_ui::{draw_empty, Metrics, Theme, Zones};

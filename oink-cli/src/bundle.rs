@@ -1,5 +1,6 @@
 //! A game bundle: one directory with `config.yaml`, `rulebook.yaml`, and
-//! `story.ink` (or a precompiled `story.ink.json`). A `cover.png` is optional.
+//! `story.ink` (or a precompiled `story.ink.json`). A `cover.png` and a
+//! `ui.yaml` are optional.
 
 use std::fmt;
 use std::fs;
@@ -11,6 +12,7 @@ pub const RULEBOOK: &str = "rulebook.yaml";
 pub const STORY_INK: &str = "story.ink";
 pub const STORY_JSON: &str = "story.ink.json";
 pub const COVER: &str = "cover.png";
+pub const UI: &str = "ui.yaml";
 
 /// The story source, as found in the bundle.
 #[derive(Debug)]
@@ -27,6 +29,7 @@ pub struct Bundle {
     pub config: String,
     pub rulebook: String,
     pub story: Story,
+    pub ui: Option<String>,
 }
 
 #[derive(Debug)]
@@ -72,11 +75,17 @@ impl Bundle {
         } else {
             return Err(BundleError::MissingStory(dir.to_path_buf()));
         };
+        let ui = if dir.join(UI).is_file() {
+            Some(read(dir, UI)?)
+        } else {
+            None
+        };
         Ok(Self {
             dir: dir.to_path_buf(),
             config,
             rulebook,
             story,
+            ui,
         })
     }
 
@@ -84,6 +93,11 @@ impl Bundle {
     pub fn cover(&self) -> Option<PathBuf> {
         let path = self.dir.join(COVER);
         path.is_file().then_some(path)
+    }
+
+    /// The optional `ui.yaml` source.
+    pub fn ui(&self) -> Option<&str> {
+        self.ui.as_deref()
     }
 }
 
@@ -115,9 +129,13 @@ mod tests {
         assert_eq!(bundle.config, "title: T\n");
         assert!(matches!(bundle.story, Story::Ink(ref source) if source.starts_with("Hi.")));
         assert!(bundle.cover().is_none());
+        assert!(bundle.ui().is_none());
 
         fs::write(dir.join(COVER), b"not really a png").unwrap();
         assert_eq!(bundle.cover(), Some(dir.join(COVER)));
+        fs::write(dir.join(UI), "version: 1\n").unwrap();
+        let bundle = Bundle::open(&dir).unwrap();
+        assert_eq!(bundle.ui(), Some("version: 1\n"));
         fs::remove_dir_all(&dir).unwrap();
     }
 

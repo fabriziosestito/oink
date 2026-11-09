@@ -7,6 +7,7 @@ Start with the [documentation index](docs/index.md).
 - [Checks and modifiers](docs/reference/checks.md)
 - [Character state and scene boundaries](docs/reference/state.md)
 - [Ink API](docs/reference/ink-api.md)
+- [UI configuration](docs/reference/ui.md)
 - [Rust API](docs/reference/rust-api.md)
 - [Architecture](docs/architecture.md)
 - [Writing docs](docs/publishing.md)

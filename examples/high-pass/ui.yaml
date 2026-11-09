@@ -1,0 +1,27 @@
+# Presentation for The High Pass. Every field is optional.
+version: 1
+
+reader:
+  items_per_page: 8
+  log_entries: 50
+  save_slots: 3
+  sheet_order: [characteristics, abilities, perks, conditions, spells]
+  top_bar:
+    resources: [focus]
+    characteristics: [intellect, psyche, physique, motorics]
+
+status:
+  resources: [focus]
+  show_level: true
+  show_conditions: true
+
+theme:
+  eink:
+    paper: 15
+    ink: 0
+    dim: 7
+    accent: 3
+  terminal:
+    text: default
+    background: default
+    accent: cyan

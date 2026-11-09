@@ -1098,6 +1098,7 @@ dependencies = [
  "clap",
  "image",
  "oink-core",
+ "oink-ui",
  "ratatui",
  "ratatui-image",
  "unicode-width",
@@ -1127,6 +1128,9 @@ name = "oink-ui"
 version = "0.1.0"
 dependencies = [
  "embedded-graphics",
+ "oink-core",
+ "serde",
+ "serde_yaml",
 ]
 
 [[package]]
