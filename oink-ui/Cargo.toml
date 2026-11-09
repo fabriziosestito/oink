@@ -7,10 +7,12 @@ description = "oink shared reader layout for e-ink players"
 
 [features]
 default = ["render"]
-render = ["dep:embedded-graphics"]
+render = ["dep:embedded-graphics", "dep:profont"]
 
 [dependencies]
 oink-core = { path = "../oink-core" }
 serde.workspace = true
 serde_yaml.workspace = true
+unicode-width.workspace = true
 embedded-graphics = { workspace = true, optional = true }
+profont = { workspace = true, optional = true }
