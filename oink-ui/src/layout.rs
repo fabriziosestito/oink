@@ -17,15 +17,22 @@ pub struct Zones {
 }
 
 impl Zones {
+    /// The three zones for `metrics`.
+    ///
+    /// The zones never overlap. When the configured bars are taller than the
+    /// screen, the bottom bar shrinks and the center becomes zero height.
+    /// [`Metrics::is_valid`] reports the invalid configuration to the host.
     pub fn from_metrics(metrics: Metrics) -> Self {
         let top_height = metrics.top_bar_height.min(metrics.height);
-        let bottom_height = metrics.bottom_bar_height.min(metrics.height);
-        let bottom_y = metrics.height.saturating_sub(metrics.bottom_bar_height);
+        let bottom_height = metrics
+            .bottom_bar_height
+            .min(metrics.height.saturating_sub(top_height));
+        let bottom_y = metrics.height.saturating_sub(bottom_height);
         Self {
             top: Rectangle::new(Point::zero(), Size::new(metrics.width, top_height)),
             center: Rectangle::new(
                 Point::new(0, top_height as i32),
-                Size::new(metrics.width, metrics.center_height()),
+                Size::new(metrics.width, bottom_y.saturating_sub(top_height)),
             ),
             bottom: Rectangle::new(
                 Point::new(0, bottom_y as i32),
@@ -72,6 +79,19 @@ mod tests {
         assert!(zones.top.top_left.y + zones.top.size.height as i32 <= zones.center.top_left.y);
         assert!(
             zones.center.top_left.y + zones.center.size.height as i32 <= zones.bottom.top_left.y
+        );
+    }
+
+    #[test]
+    fn oversized_bars_never_overlap() {
+        let zones = Metrics::new(320, 200, 120, 120).zones();
+        assert_eq!(zones.top.size.height, 120);
+        assert_eq!(zones.center.size.height, 0);
+        assert_eq!(zones.bottom.top_left.y, 120);
+        assert_eq!(zones.bottom.size.height, 80);
+        assert_eq!(
+            zones.top.size.height + zones.center.size.height + zones.bottom.size.height,
+            200
         );
     }
 }

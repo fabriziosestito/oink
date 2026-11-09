@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 oink-core = { path = "../oink-core" }
+oink-ui = { path = "../oink-ui", default-features = false }
 clap = { version = "4", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 ratatui = "0.30"

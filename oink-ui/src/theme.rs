@@ -2,6 +2,8 @@
 
 use embedded_graphics::pixelcolor::Gray4;
 
+use crate::config::EinkTheme;
+
 /// The four tones the reader draws.
 ///
 /// The default theme is ink on paper. A 1-bit panel maps `dim` and `accent`
@@ -14,14 +16,21 @@ pub struct Theme {
     pub accent: Gray4,
 }
 
+impl Theme {
+    /// Build the palette from the `theme.eink` block of `ui.yaml`.
+    pub fn from_config(config: &EinkTheme) -> Self {
+        Self {
+            paper: Gray4::new(config.paper),
+            ink: Gray4::new(config.ink),
+            dim: Gray4::new(config.dim),
+            accent: Gray4::new(config.accent),
+        }
+    }
+}
+
 impl Default for Theme {
     fn default() -> Self {
-        Self {
-            paper: Gray4::new(15),
-            ink: Gray4::new(0),
-            dim: Gray4::new(7),
-            accent: Gray4::new(4),
-        }
+        Self::from_config(&EinkTheme::default())
     }
 }
 
@@ -36,5 +45,20 @@ mod tests {
         assert!(theme.paper.luma() > theme.dim.luma());
         assert!(theme.dim.luma() > theme.accent.luma());
         assert!(theme.accent.luma() > theme.ink.luma());
+    }
+
+    #[test]
+    fn the_theme_follows_the_config() {
+        let config = EinkTheme {
+            paper: 14,
+            ink: 1,
+            dim: 6,
+            accent: 3,
+        };
+        let theme = Theme::from_config(&config);
+        assert_eq!(theme.paper.luma(), 14);
+        assert_eq!(theme.ink.luma(), 1);
+        assert_eq!(theme.dim.luma(), 6);
+        assert_eq!(theme.accent.luma(), 3);
     }
 }

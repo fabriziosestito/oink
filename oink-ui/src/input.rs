@@ -30,7 +30,9 @@ pub enum BarButton {
 }
 
 impl BarButton {
-    pub const ALL: [Self; 4] = [Self::Sheet, Self::Inventory, Self::Log, Self::Menu];
+    /// The buttons the bar shows. The menu stays hidden until save and load
+    /// land.
+    pub const ALL: [Self; 3] = [Self::Sheet, Self::Inventory, Self::Log];
     pub const COUNT: usize = Self::ALL.len();
 
     pub const fn view(self) -> View {
@@ -124,26 +126,30 @@ impl UiState {
     }
 
     /// Apply one action and return the work the host must do.
+    ///
+    /// Choice movement and confirmation work only in the reader. An open
+    /// sheet, inventory, log, or menu owns its own navigation, so the story
+    /// never advances behind it.
     pub fn handle(&mut self, action: Action) -> Effect {
         match action {
             Action::Quit => Effect::Quit,
             Action::Back => self.back(),
             Action::Open(view) => self.open(view),
-            Action::Up => {
+            Action::Up if self.view == View::Reader => {
                 self.move_up();
                 Effect::None
             }
-            Action::Down => {
+            Action::Down if self.view == View::Reader => {
                 self.move_down();
                 Effect::None
             }
-            Action::Left => {
+            Action::Left if self.view == View::Reader => {
                 if self.focus == Focus::Bar {
                     self.bar = (self.bar + BarButton::COUNT - 1) % BarButton::COUNT;
                 }
                 Effect::None
             }
-            Action::Right => {
+            Action::Right if self.view == View::Reader => {
                 if self.focus == Focus::Bar {
                     self.bar = (self.bar + 1) % BarButton::COUNT;
                 }
@@ -151,11 +157,14 @@ impl UiState {
             }
             Action::PageUp => Effect::PageUp,
             Action::PageDown => Effect::PageDown,
-            Action::Confirm => match self.focus {
+            Action::Confirm if self.view == View::Reader => match self.focus {
                 Focus::Choices if self.choice_count > 0 => Effect::Choose(self.choice),
                 Focus::Choices => Effect::None,
                 Focus::Bar => self.open(self.highlighted_button().view()),
             },
+            Action::Up | Action::Down | Action::Left | Action::Right | Action::Confirm => {
+                Effect::None
+            }
         }
     }
 
@@ -301,9 +310,24 @@ mod tests {
         let mut state = with_choices(1);
         state.handle(Action::Down);
         state.handle(Action::Left);
-        assert_eq!(state.highlighted_button(), BarButton::Menu);
+        assert_eq!(state.highlighted_button(), BarButton::Log);
         state.handle(Action::Right);
         assert_eq!(state.highlighted_button(), BarButton::Sheet);
+    }
+
+    #[test]
+    fn the_menu_is_not_on_the_bar_before_saves_land() {
+        assert!(!BarButton::ALL.contains(&BarButton::Menu));
+    }
+
+    #[test]
+    fn an_open_view_does_not_advance_the_story() {
+        let mut state = with_choices(3);
+        state.handle(Action::Open(View::Sheet));
+        assert_eq!(state.handle(Action::Confirm), Effect::None);
+        assert_eq!(state.handle(Action::Down), Effect::None);
+        assert_eq!(state.highlighted_choice(), 0);
+        assert_eq!(state.view(), View::Sheet);
     }
 
     #[test]
