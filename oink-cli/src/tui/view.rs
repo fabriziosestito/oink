@@ -2,6 +2,7 @@
 //! status bar. The view also records where the choices landed and how far
 //! the prose can scroll, so the state can answer clicks and keys.
 
+use oink_ui::View;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{
@@ -9,8 +10,8 @@ use ratatui::widgets::{
 };
 use ratatui::Frame;
 
-use crate::cover::Cover;
 use crate::game::THE_END;
+use crate::picture::Picture;
 use crate::wrap;
 
 use super::app::{App, Screen};
@@ -24,7 +25,14 @@ const MARGIN: u16 = 2;
 /// Rows kept for the prose when the choices are tall.
 const MIN_PROSE_ROWS: u16 = 3;
 
-pub fn draw(frame: &mut Frame, app: &mut App, theme: &Theme, cover: Option<&mut Cover>) {
+pub fn draw(
+    frame: &mut Frame,
+    app: &mut App,
+    theme: &Theme,
+    cover: Option<&mut Picture>,
+    portrait: Option<&mut Picture>,
+    image: Option<&mut Picture>,
+) {
     let area = frame.area();
     if area.height < 6 || area.width < 2 * MARGIN + 4 {
         app.choice_areas.clear();
@@ -38,14 +46,23 @@ pub fn draw(frame: &mut Frame, app: &mut App, theme: &Theme, cover: Option<&mut 
     ])
     .areas(area);
     let title = match app.screen {
-        Screen::Cover => "",
-        Screen::Page | Screen::End => app.title.as_str(),
+        Screen::Cover => String::new(),
+        Screen::Panel(View::Sheet) => "Sheet".to_string(),
+        Screen::Panel(View::Inventory) => "Inventory".to_string(),
+        Screen::Panel(View::Log) => "Log".to_string(),
+        Screen::Panel(_) => String::new(),
+        Screen::Menu => "Menu".to_string(),
+        Screen::Item => app.detail_title(),
+        Screen::Page | Screen::End => app.title.clone(),
     };
-    draw_header(frame, header, title, theme);
+    draw_header(frame, header, &title, theme);
     let column = column(body);
     match app.screen {
         Screen::Cover => draw_cover(frame, column, app, theme, cover),
-        Screen::Page | Screen::End => draw_page(frame, column, body, app, theme),
+        Screen::Panel(view) => draw_panel(frame, column, app, theme, view),
+        Screen::Menu => draw_menu(frame, column, app, theme),
+        Screen::Item => draw_item(frame, column, app, theme, image),
+        Screen::Page | Screen::End => draw_page(frame, column, body, app, theme, portrait, image),
     }
     draw_footer(frame, footer, app, theme);
 }
@@ -86,6 +103,27 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             "1-9 · ↑↓ · Enter · q",
             "q",
         ],
+        Screen::Panel(View::Inventory) => &[
+            "↑↓ select · Enter open · PgUp/PgDn page · Backspace back · q quit",
+            "↑↓ · Enter · Backspace · q",
+            "Backspace · q",
+            "q",
+        ],
+        Screen::Panel(_) => &[
+            "PgUp/PgDn page · Backspace back · q quit",
+            "Backspace back · q",
+            "q",
+        ],
+        Screen::Menu => &[
+            "↑↓ move · Enter choose · Backspace back · q quit",
+            "↑↓ · Enter · Backspace · q",
+            "q",
+        ],
+        Screen::Item => &[
+            "PgUp/PgDn page · Backspace back · q quit",
+            "Backspace back · q",
+            "q",
+        ],
         Screen::End => &["Enter close", "Enter"],
     };
     let line = text::status_line(&app.status, hints, bar.width as usize, theme);
@@ -97,7 +135,7 @@ fn draw_cover(
     column: Rect,
     app: &App,
     theme: &Theme,
-    cover: Option<&mut Cover>,
+    cover: Option<&mut Picture>,
 ) {
     let [picture, caption] =
         Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).areas(column);
@@ -112,13 +150,145 @@ fn draw_cover(
     frame.render_widget(Paragraph::new(Text::from(lines)), caption);
 }
 
+/// A panel: the sheet, the inventory, or the log, paged over the column
+/// with the page controls on the last row.
+fn draw_panel(frame: &mut Frame, column: Rect, app: &mut App, theme: &Theme, view: View) {
+    let columns = column.width as usize;
+    let rows = column.height.saturating_sub(1) as usize;
+    app.sync_panel(view, columns, rows);
+    let selected = app.panel_items.get(app.item_selection).cloned();
+    app.item_areas.clear();
+    let page: Vec<oink_ui::Line> = app.panel_pager.current().to_vec();
+    let lines: Vec<Line<'static>> = page
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let mut styled = text::panel_line(line, theme);
+            if line.item.is_some() && line.item == selected {
+                styled = styled.style(theme.choice_selected);
+            }
+            if let Some(id) = &line.item {
+                let area = Rect {
+                    x: column.x,
+                    y: column.y.saturating_add(index as u16),
+                    width: column.width,
+                    height: 1,
+                };
+                app.item_areas.push((id.clone(), area));
+            }
+            styled
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(Text::from(lines)), column);
+    let pages = app.panel_pager.pages();
+    if pages > 1 {
+        let label = format!("< {}/{} >", app.panel_pager.page() + 1, pages);
+        let controls = Rect {
+            x: column.x,
+            y: column.bottom().saturating_sub(1),
+            width: column.width,
+            height: 1,
+        };
+        frame.render_widget(
+            Paragraph::new(label)
+                .style(theme.hint)
+                .alignment(Alignment::Right),
+            controls,
+        );
+    }
+}
+
+/// The save and load menu: one save row and one load row per numbered slot.
+///
+/// The selected row draws inverted. When a slot is empty, its load row says
+/// so. A message above the rows reports the result of the last action.
+fn draw_menu(frame: &mut Frame, column: Rect, app: &mut App, theme: &Theme) {
+    let width = column.width as usize;
+    let mut header = Vec::new();
+    if let Some(message) = &app.menu_message {
+        for line in wrap::wrap_plain(message, width) {
+            header.push(Line::styled(line, theme.note));
+        }
+        header.push(Line::default());
+    }
+    let header_height = row_count(header.len()).min(column.height);
+    let header_area = Rect {
+        height: header_height,
+        ..column
+    };
+    if !header.is_empty() {
+        frame.render_widget(Paragraph::new(Text::from(header)), header_area);
+    }
+
+    let rows = app.menu_rows();
+    let visible = column.height.saturating_sub(header_height) as usize;
+    let first = if visible == 0 || app.menu_selection < visible {
+        0
+    } else {
+        app.menu_selection + 1 - visible
+    };
+    app.menu_areas.clear();
+    let first_row = column.y + header_height;
+    for ((index, row), y) in rows
+        .iter()
+        .enumerate()
+        .skip(first)
+        .take(visible)
+        .zip(first_row..)
+    {
+        if y >= column.bottom() {
+            break;
+        }
+        let area = Rect {
+            x: column.x,
+            y,
+            width: column.width,
+            height: 1,
+        };
+        let style = if index == app.menu_selection {
+            theme.choice_selected
+        } else {
+            theme.choice
+        };
+        frame.render_widget(Paragraph::new(app.menu_label(*row)).style(style), area);
+        app.menu_areas.push((index, area));
+    }
+}
+
 /// The scene: prose with checks and notices on top, then the choices after
 /// one blank row. When the prose does not fit, it scrolls and the choices
 /// stay pinned at the bottom. The ending has no choices and closes with the
 /// house line.
-fn draw_page(frame: &mut Frame, column: Rect, body: Rect, app: &mut App, theme: &Theme) {
+///
+/// A dialog scene names the speaker above the prose and draws the portrait
+/// of the speaker on the left, when the player loaded one. A map scene
+/// draws the map label above the choices and marks each choice as a
+/// location.
+fn draw_page(
+    frame: &mut Frame,
+    column: Rect,
+    body: Rect,
+    app: &mut App,
+    theme: &Theme,
+    portrait: Option<&mut Picture>,
+    image: Option<&mut Picture>,
+) {
     let width = column.width as usize;
     let mut lines = text::page_lines(&app.page, width, theme);
+    let dialog = app.page.mode == "dialog";
+    let map = app.page.mode == "map";
+    if dialog {
+        if let Some(speaker) = &app.page.speaker {
+            lines.insert(0, Line::styled(speaker.clone(), theme.title));
+            lines.insert(1, Line::default());
+        }
+    }
+    if map {
+        if let Some(label) = &app.page.map {
+            lines.push(Line::default());
+            lines.push(Line::styled(label.clone(), theme.title));
+        }
+    }
     if app.screen == Screen::End {
         lines.push(Line::default());
         for line in wrap::wrap_plain(THE_END, width) {
@@ -130,7 +300,9 @@ fn draw_page(frame: &mut Frame, column: Rect, body: Rect, app: &mut App, theme: 
         .choices
         .iter()
         .enumerate()
-        .map(|(index, runs)| text::choice_lines(index, runs, index == app.selected, width, theme))
+        .map(|(index, runs)| {
+            text::choice_lines(index, runs, index == app.selected, map, width, theme)
+        })
         .collect();
     let choice_rows: u16 = choices.iter().map(|lines| row_count(lines.len())).sum();
     let choices_height = if choice_rows == 0 {
@@ -147,22 +319,35 @@ fn draw_page(frame: &mut Frame, column: Rect, body: Rect, app: &mut App, theme: 
     ])
     .areas(column);
 
-    app.viewport = prose_area.height;
-    app.max_scroll = total.saturating_sub(prose_area.height);
+    // A dialog portrait shares the prose area: the picture on the left,
+    // the text on the rest. A scene picture takes the top of the prose
+    // area, above the text.
+    let prose_area = if let Some(picture) = portrait {
+        let [picture_area, text_area] =
+            Layout::horizontal([Constraint::Percentage(33), Constraint::Min(1)]).areas(prose_area);
+        picture.render(frame, picture_area);
+        text_area
+    } else {
+        prose_area
+    };
+    let text_area = split_image(frame, prose_area, image);
+
+    app.viewport = text_area.height;
+    app.max_scroll = total.saturating_sub(text_area.height);
     app.scroll = app.scroll.min(app.max_scroll);
     frame.render_widget(
         Paragraph::new(Text::from(lines)).scroll((app.scroll, 0)),
-        prose_area,
+        text_area,
     );
     if app.max_scroll > 0 {
         let mut state = ScrollbarState::new(total as usize)
             .position(app.scroll as usize)
-            .viewport_content_length(prose_area.height as usize);
+            .viewport_content_length(text_area.height as usize);
         let bar = Rect {
             x: body.right().saturating_sub(1),
-            y: prose_area.y,
+            y: text_area.y,
             width: 1,
-            height: prose_area.height,
+            height: text_area.height,
         };
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight).style(theme.rule),
@@ -194,6 +379,60 @@ fn draw_page(frame: &mut Frame, column: Rect, body: Rect, app: &mut App, theme: 
     }
 }
 
+/// The detail page of one inventory item. The picture, when the rulebook
+/// gives one, takes the top of the page with the text below. Page controls
+/// sit on the last row, as in the panels.
+fn draw_item(
+    frame: &mut Frame,
+    column: Rect,
+    app: &mut App,
+    theme: &Theme,
+    image: Option<&mut Picture>,
+) {
+    let text_area = split_image(frame, column, image);
+    let rows = text_area.height.saturating_sub(1) as usize;
+    app.sync_item(text_area.width as usize, rows);
+    let lines: Vec<Line<'static>> = app
+        .item_pager
+        .current()
+        .iter()
+        .map(|line| text::panel_line(line, theme))
+        .collect();
+    frame.render_widget(Paragraph::new(Text::from(lines)), text_area);
+    let pages = app.item_pager.pages();
+    if pages > 1 {
+        let label = format!("< {}/{} >", app.item_pager.page() + 1, pages);
+        let controls = Rect {
+            x: text_area.x,
+            y: text_area.bottom().saturating_sub(1),
+            width: text_area.width,
+            height: 1,
+        };
+        frame.render_widget(
+            Paragraph::new(label)
+                .style(theme.hint)
+                .alignment(Alignment::Right),
+            controls,
+        );
+    }
+}
+
+/// Draw a scene or item picture at the top of `area` and return the text
+/// area below it. A small area keeps all the rows for the text.
+fn split_image(frame: &mut Frame, area: Rect, image: Option<&mut Picture>) -> Rect {
+    let Some(picture) = image else {
+        return area;
+    };
+    if area.height < 8 {
+        return area;
+    }
+    let height = (area.height * 2 / 5).clamp(3, 14);
+    let [picture_area, text_area] =
+        Layout::vertical([Constraint::Length(height), Constraint::Min(1)]).areas(area);
+    picture.render(frame, picture_area);
+    text_area
+}
+
 fn row_count(count: usize) -> u16 {
     u16::try_from(count).unwrap_or(u16::MAX)
 }
@@ -213,7 +452,7 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         let theme = Theme::colored();
         terminal
-            .draw(|frame| draw(frame, app, &theme, None))
+            .draw(|frame| draw(frame, app, &theme, None, None, None))
             .unwrap();
         terminal.backend().buffer().clone()
     }
@@ -303,6 +542,84 @@ mod tests {
         let rows = lines_of(&buffer);
         assert!(rows[2].contains("xxxx"), "{rows:?}");
         assert!(rows.iter().any(|r| r.contains("yyyy")), "{rows:?}");
+    }
+
+    #[test]
+    fn an_empty_log_shows_the_notice_and_no_controls() {
+        let mut app = app();
+        app.update(Action::Open(View::Log)).unwrap();
+        let buffer = render(&mut app, 40, 12);
+        let rows = lines_of(&buffer);
+        assert_eq!(rows[0].trim(), "Log");
+        assert!(
+            rows.iter().any(|r| r.contains("No entries yet.")),
+            "{rows:?}"
+        );
+        assert!(
+            !rows.iter().any(|r| r.contains("< 1/")),
+            "one page needs no controls: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn a_panel_shows_its_title_lines_and_page_controls() {
+        let mut app = app();
+        for number in 0..20 {
+            app.log.push(format!("entry {number}"));
+        }
+        app.update(Action::Open(View::Log)).unwrap();
+        let buffer = render(&mut app, 40, 12);
+        let rows = lines_of(&buffer);
+        assert_eq!(rows[0].trim(), "Log");
+        assert!(rows[2].contains("entry 19"), "{rows:?}");
+        assert!(rows[8].contains("entry 13"), "{rows:?}");
+        assert!(rows[9].ends_with("< 1/3 >"), "{rows:?}");
+        assert!(rows[11].contains("Backspace back"), "{rows:?}");
+
+        app.update(Action::PageDown).unwrap();
+        let buffer = render(&mut app, 40, 12);
+        let rows = lines_of(&buffer);
+        assert!(rows[2].contains("entry 12"), "{rows:?}");
+        assert!(rows[9].ends_with("< 2/3 >"), "{rows:?}");
+    }
+
+    #[test]
+    fn a_dialog_scene_names_the_speaker() {
+        let mut app = app();
+        app.update(Action::Pick(0)).unwrap();
+        let buffer = render(&mut app, 40, 12);
+        let rows = lines_of(&buffer);
+        assert!(
+            rows.iter().any(|r| r.trim().starts_with("keeper")),
+            "{rows:?}"
+        );
+        assert!(
+            rows.iter().any(|r| r.trim().starts_with("Inside.")),
+            "{rows:?}"
+        );
+        assert!(rows.iter().any(|r| r.contains("1. Sit")), "{rows:?}");
+    }
+
+    #[test]
+    fn a_map_scene_labels_the_map_and_marks_the_locations() {
+        let mut app = app();
+        app.update(Action::Pick(0)).unwrap();
+        app.update(Action::Confirm).unwrap();
+        let buffer = render(&mut app, 40, 12);
+        let rows = lines_of(&buffer);
+        assert!(
+            rows.iter().any(|r| r.trim() == "Two ways down."),
+            "{rows:?}"
+        );
+        assert!(rows.iter().any(|r| r.trim() == "valley"), "{rows:?}");
+        assert!(
+            rows.iter().any(|r| r.contains("1. ◆ The bridge")),
+            "{rows:?}"
+        );
+        assert!(
+            rows.iter().any(|r| r.contains("2. ◆ The scree")),
+            "{rows:?}"
+        );
     }
 
     #[test]

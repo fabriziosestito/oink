@@ -48,6 +48,32 @@ fn the_high_pass_plays_to_an_ending() {
 }
 
 #[test]
+fn the_cairn_cache_adds_a_stack_of_rations() {
+    let example = example();
+    let output = oink(&[
+        "run",
+        example.to_str().unwrap(),
+        "--seed",
+        "7",
+        "--choices",
+        "1,1,3,1,1,1,1",
+    ]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains("three rations"), "{stdout}");
+    assert_eq!(
+        stdout.matches("item added: trail_ration").count(),
+        3,
+        "the cache adds three rations to one stack:\n{stdout}"
+    );
+}
+
+#[test]
 fn the_same_seed_gives_the_same_transcript() {
     let example = example();
     let args = [

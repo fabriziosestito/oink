@@ -223,6 +223,18 @@ items:
     modifiers:
       abilities: { endurance: 1 }
       tags: { brute: 1 }
+  climbing_rope:
+    name: Climbing Rope
+    description: Coiled hemp, dry enough to trust.
+    weight: 2
+    tags: [tool]
+    modifiers:
+      abilities: { endurance: 1 }
+  trail_ration:
+    name: Trail Ration
+    description: Dried meat and hard bread.
+    weight: 1
+    consumable: true
   cigarette:
     name: Cigarette
     tags: [stimulant]

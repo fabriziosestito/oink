@@ -7,12 +7,13 @@ mod text;
 mod theme;
 mod view;
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 
 use image::DynamicImage;
 use oink_core::Engine;
-use oink_ui::{StatusConfig, UiConfig};
+use oink_ui::{UiConfig, View};
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyEvent,
     KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -22,9 +23,10 @@ use ratatui::layout::Position;
 use ratatui::DefaultTerminal;
 
 use crate::bundle::Bundle;
-use crate::cover::Cover;
 use crate::game::{self, THE_END};
-use app::{Action, App, Screen};
+use crate::picture::{Painter, Picture};
+use crate::saves::Saves;
+use app::{Action, App, Presentation, Screen};
 use theme::Theme;
 
 /// Rows one notch of the mouse wheel scrolls.
@@ -34,14 +36,8 @@ const WHEEL_ROWS: u16 = 3;
 /// ending, the house line stays on the terminal.
 pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     let engine = game::load(bundle, seed)?;
-    let ui = match bundle.ui() {
-        Some(yaml) => {
-            let ui = UiConfig::from_yaml(yaml)?;
-            ui.validate(&engine.data.rulebook)?;
-            ui
-        }
-        None => UiConfig::default(),
-    };
+    let ui = UiConfig::from_config(&bundle.config)?;
+    ui.validate(&engine.data.rulebook)?;
     let picture = bundle.cover().and_then(|path| match image::open(&path) {
         Ok(picture) => Some(picture),
         Err(error) => {
@@ -57,7 +53,7 @@ pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
         hook(info);
     }));
     let mut terminal = ratatui::init();
-    let result = play(&mut terminal, engine, ui.status, picture, &theme);
+    let result = play(&mut terminal, bundle, engine, ui, picture, &theme);
     ratatui::restore();
     drop(terminal);
 
@@ -70,21 +66,77 @@ pub fn run(bundle: &Bundle, seed: Option<u64>) -> Result<(), Box<dyn Error>> {
 /// The event loop. Returns whether the story reached an ending.
 fn play(
     terminal: &mut DefaultTerminal,
+    bundle: &Bundle,
     engine: Engine,
-    status: StatusConfig,
+    ui: UiConfig,
     picture: Option<DynamicImage>,
     theme: &Theme,
 ) -> Result<bool, Box<dyn Error>> {
     let _mouse = MouseCapture::enable()?;
-    let mut cover = picture.map(Cover::new);
-    let mut app = App::new(engine, cover.is_some(), status)?;
+    let painter = Painter::probe();
+    let mut cover = picture.map(|picture| painter.view(picture));
+    let saves = Saves::beside(&bundle.dir, ui.reader.save_slots);
+    let presentation = Presentation {
+        reader: ui.reader,
+        status: ui.status,
+        characters: ui.characters,
+        maps: ui.maps,
+    };
+    let mut app = App::new(engine, cover.is_some(), presentation, saves)?;
+    // The dialog portraits, loaded on first use and kept for the session.
+    let mut portraits: HashMap<String, Option<Picture>> = HashMap::new();
+    // The scene and item pictures, keyed by their path in the bundle.
+    let mut images: HashMap<String, Option<Picture>> = HashMap::new();
     while !app.quit {
-        terminal.draw(|frame| view::draw(frame, &mut app, theme, cover.as_mut()))?;
+        let portrait = match app.portrait() {
+            Some(id) => {
+                if !portraits.contains_key(id) {
+                    portraits.insert(id.to_string(), load_portrait(bundle, &app, &painter, id));
+                }
+                portraits.get_mut(id).and_then(|picture| picture.as_mut())
+            }
+            None => None,
+        };
+        let image = match app.image_path().map(str::to_string) {
+            Some(path) => {
+                if !images.contains_key(&path) {
+                    images.insert(path.clone(), load_image(bundle, &painter, &path));
+                }
+                images.get_mut(&path).and_then(|picture| picture.as_mut())
+            }
+            None => None,
+        };
+        terminal
+            .draw(|frame| view::draw(frame, &mut app, theme, cover.as_mut(), portrait, image))?;
         if let Some(action) = action(event::read()?) {
             app.update(action)?;
         }
     }
     Ok(app.screen == Screen::End)
+}
+
+/// The portrait picture of a character, when its file reads.
+fn load_portrait(bundle: &Bundle, app: &App, painter: &Painter, id: &str) -> Option<Picture> {
+    let path = app.portrait_path(id).map(|path| bundle.dir.join(path))?;
+    match image::open(&path) {
+        Ok(picture) => Some(painter.view(picture)),
+        Err(error) => {
+            eprintln!("warning: cannot read portrait {}: {error}", path.display());
+            None
+        }
+    }
+}
+
+/// A scene or item picture, when its file reads.
+fn load_image(bundle: &Bundle, painter: &Painter, path: &str) -> Option<Picture> {
+    let path = bundle.dir.join(path);
+    match image::open(&path) {
+        Ok(picture) => Some(painter.view(picture)),
+        Err(error) => {
+            eprintln!("warning: cannot read image {}: {error}", path.display());
+            None
+        }
+    }
 }
 
 fn action(event: TermEvent) -> Option<Action> {
@@ -106,6 +158,11 @@ fn key_action(key: KeyEvent) -> Option<Action> {
         KeyCode::PageDown => Some(Action::PageDown),
         KeyCode::Home => Some(Action::ScrollTop),
         KeyCode::End => Some(Action::ScrollBottom),
+        KeyCode::Backspace => Some(Action::Close),
+        KeyCode::Char('s') => Some(Action::Open(View::Sheet)),
+        KeyCode::Char('i') => Some(Action::Open(View::Inventory)),
+        KeyCode::Char('l') => Some(Action::Open(View::Log)),
+        KeyCode::Char('m') => Some(Action::Open(View::Menu)),
         KeyCode::Char(digit) => digit
             .to_digit(10)
             .filter(|number| *number > 0)
@@ -158,6 +215,23 @@ mod tests {
         assert_eq!(action(press(KeyCode::Enter)), Some(Action::Confirm));
         assert_eq!(action(press(KeyCode::Char('j'))), Some(Action::Down));
         assert_eq!(action(press(KeyCode::Up)), Some(Action::Up));
+        assert_eq!(action(press(KeyCode::Backspace)), Some(Action::Close));
+        assert_eq!(
+            action(press(KeyCode::Char('s'))),
+            Some(Action::Open(View::Sheet))
+        );
+        assert_eq!(
+            action(press(KeyCode::Char('i'))),
+            Some(Action::Open(View::Inventory))
+        );
+        assert_eq!(
+            action(press(KeyCode::Char('l'))),
+            Some(Action::Open(View::Log))
+        );
+        assert_eq!(
+            action(press(KeyCode::Char('m'))),
+            Some(Action::Open(View::Menu))
+        );
         assert_eq!(action(press(KeyCode::Esc)), Some(Action::Quit));
         assert_eq!(
             action(TermEvent::Key(KeyEvent::new(

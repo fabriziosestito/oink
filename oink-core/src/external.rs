@@ -339,7 +339,7 @@ pub(crate) fn bind_external_functions(
                     let changes = state.character.add_condition(&state.rulebook, &condition);
                     state.changes.extend(changes);
                 }
-                let changes = state.character.remove_item(&id);
+                let changes = state.character.consume_item(&id, 1);
                 state.changes.extend(changes);
             }
             void_result()

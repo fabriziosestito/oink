@@ -1,9 +1,10 @@
 //! `oink`: play a game bundle in the terminal.
 
 mod bundle;
-mod cover;
 mod game;
+mod picture;
 mod player;
+mod saves;
 mod tui;
 mod wrap;
 

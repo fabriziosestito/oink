@@ -2,6 +2,10 @@
 
 use crate::data::GameData;
 use crate::external::bind_external_functions;
+use crate::tags::{
+    image_from_tags, map_from_tags, mode_from_tags, mood_from_tags, portrait_from_tags,
+    speaker_from_tags, DEFAULT_MODE,
+};
 use bladeink::story::Story;
 use bladeink::story_error::StoryError;
 use bladeink_compiler::Compiler;
@@ -9,21 +13,34 @@ use oink_rulebook::{
     Breakdown, Character, CheckResult, Dice, DiceRoll, RollKind, Rulebook, SeededDice, StateChange,
     SystemDice,
 };
+use serde::{Deserialize, Serialize};
 use std::cell::{Ref, RefCell};
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+/// The save file format version. A file with another version is rejected.
+pub const SAVE_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Choice {
     pub index: usize,
     pub text: String,
 }
 
 /// What the UI should present next.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Event {
-    /// Prose paragraphs followed by choices to pick from.
+    /// Prose paragraphs followed by choices to pick from. `mode` is the
+    /// scene mode from the `# mode: <id>` tag, and defaults to `prose`.
+    /// `speaker`, `mood`, `portrait`, `map`, and `image` carry the values of
+    /// the other scene tags, or `None` without the tag.
     Scene {
+        mode: String,
+        speaker: Option<String>,
+        mood: Option<String>,
+        portrait: Option<String>,
+        map: Option<String>,
+        image: Option<String>,
         text: Vec<String>,
         choices: Vec<Choice>,
     },
@@ -36,6 +53,8 @@ pub enum Event {
 pub enum EngineError {
     Compile(String),
     Story(String),
+    /// A save file could not be written or read.
+    Save(String),
 }
 
 impl fmt::Display for EngineError {
@@ -43,6 +62,7 @@ impl fmt::Display for EngineError {
         match self {
             EngineError::Compile(msg) => write!(f, "failed to compile story: {msg}"),
             EngineError::Story(msg) => write!(f, "story error: {msg}"),
+            EngineError::Save(msg) => write!(f, "save error: {msg}"),
         }
     }
 }
@@ -153,10 +173,26 @@ pub(crate) struct RuleState {
 
 pub(crate) type Shared = Rc<RefCell<RuleState>>;
 
+/// The JSON envelope of one save file.
+///
+/// The story state covers Ink variables, visits, and the execution position.
+/// The character sheet covers resources, inventory, perks, conditions,
+/// environments, and level. The dice state keeps later rolls repeatable, and
+/// the last event lets a loaded player draw the scene that the save left.
+#[derive(Debug, Serialize, Deserialize)]
+struct SaveFile {
+    version: u32,
+    story: String,
+    character: Character,
+    dice: Option<u64>,
+    event: Option<Event>,
+}
+
 pub struct Engine {
     story: Story,
     pub data: GameData,
     state: Shared,
+    last_event: Option<Event>,
 }
 
 impl Engine {
@@ -185,7 +221,17 @@ impl Engine {
             last_check: None,
         }));
         bind_external_functions(&mut story, &state)?;
-        Ok(Self { story, data, state })
+        Ok(Self {
+            story,
+            data,
+            state,
+            last_event: None,
+        })
+    }
+
+    /// The last event the story produced, when it has one.
+    pub fn last_event(&self) -> Option<&Event> {
+        self.last_event.as_ref()
     }
 
     /// Replace the dice with a seeded source. Use it in tests and replays.
@@ -206,6 +252,57 @@ impl Engine {
     /// Take the checks made since the last call.
     pub fn take_checks(&mut self) -> Vec<CheckRecord> {
         std::mem::take(&mut self.state.borrow_mut().checks)
+    }
+
+    /// Write the story, the character, and the dice to a JSON save file.
+    pub fn snapshot(&self) -> Result<String, EngineError> {
+        let state = self.state.borrow();
+        let file = SaveFile {
+            version: SAVE_VERSION,
+            story: self.story.save_state()?,
+            character: state.character.clone(),
+            dice: state.dice.state(),
+            event: self.last_event.clone(),
+        };
+        serde_json::to_string(&file).map_err(|error| EngineError::Save(error.to_string()))
+    }
+
+    /// Load a save file into this engine and return the scene it left.
+    ///
+    /// The story must load from the same source as the save. The host keeps
+    /// the same rulebook and bundle. A file with another version is rejected.
+    /// The pending change and check queues are cleared.
+    pub fn restore(&mut self, snapshot: &str) -> Result<Event, EngineError> {
+        let SaveFile {
+            version,
+            story,
+            character,
+            dice,
+            event,
+        } = serde_json::from_str(snapshot).map_err(|error| EngineError::Save(error.to_string()))?;
+        if version != SAVE_VERSION {
+            return Err(EngineError::Save(format!(
+                "unsupported save version {version}, expected {SAVE_VERSION}"
+            )));
+        }
+        self.story.load_state(&story)?;
+        {
+            let mut state = self.state.borrow_mut();
+            state.character = character;
+            state.changes.clear();
+            state.checks.clear();
+            state.last_check = None;
+            state.dice = match dice {
+                Some(seed) => Box::new(SeededDice::new(seed)),
+                None => Box::new(SystemDice::new()),
+            };
+        }
+        let event = match event {
+            Some(event) => event,
+            None => self.current_event()?,
+        };
+        self.last_event = Some(event.clone());
+        Ok(event)
     }
 
     /// Start the story and return the first event.
@@ -237,11 +334,50 @@ impl Engine {
                 text: choice.text.clone(),
             })
             .collect();
-        if choices.is_empty() {
-            Ok(Event::TheEnd { text })
+        let event = if choices.is_empty() {
+            Event::TheEnd { text }
         } else {
-            Ok(Event::Scene { text, choices })
+            let tags = self.story.get_current_tags()?;
+            Event::Scene {
+                mode: mode_from_tags(&tags).unwrap_or_else(|| DEFAULT_MODE.to_string()),
+                speaker: speaker_from_tags(&tags),
+                mood: mood_from_tags(&tags),
+                portrait: portrait_from_tags(&tags),
+                map: map_from_tags(&tags),
+                image: image_from_tags(&tags),
+                text,
+                choices,
+            }
+        };
+        self.last_event = Some(event.clone());
+        Ok(event)
+    }
+
+    /// The current scene without its prose, for a save that carries no event.
+    fn current_event(&mut self) -> Result<Event, EngineError> {
+        let choices: Vec<Choice> = self
+            .story
+            .get_current_choices()
+            .iter()
+            .map(|choice| Choice {
+                index: *choice.index.borrow(),
+                text: choice.text.clone(),
+            })
+            .collect();
+        if choices.is_empty() {
+            return Ok(Event::TheEnd { text: Vec::new() });
         }
+        let tags = self.story.get_current_tags()?;
+        Ok(Event::Scene {
+            mode: mode_from_tags(&tags).unwrap_or_else(|| DEFAULT_MODE.to_string()),
+            speaker: speaker_from_tags(&tags),
+            mood: mood_from_tags(&tags),
+            portrait: portrait_from_tags(&tags),
+            map: map_from_tags(&tags),
+            image: image_from_tags(&tags),
+            text: Vec::new(),
+            choices,
+        })
     }
 }
 
@@ -275,7 +411,7 @@ mod tests {
         assert!(engine.character().has_item("stick"));
 
         let event = engine.start().unwrap();
-        let Event::Scene { text, choices } = event else {
+        let Event::Scene { text, choices, .. } = event else {
             panic!("expected choices")
         };
         assert_eq!(choices.len(), 2);
@@ -550,7 +686,7 @@ First.
                 let end = loop {
                     match event {
                         Event::TheEnd { text } => break text.join(" "),
-                        Event::Scene { text, choices } => {
+                        Event::Scene { text, choices, .. } => {
                             transcript.push_str(&text.join(" "));
                             transcript.push(' ');
                             steps += 1;
@@ -578,6 +714,202 @@ First.
             }
         }
         assert!(open && closed);
+    }
+
+    #[test]
+    fn the_mode_tag_selects_the_scene_page() {
+        // A knot without a tag keeps the default mode, and a knot with the
+        // tag reports its id. The tag of the knot the reader stands in
+        // last wins.
+        let mut engine = example_engine(
+            r#"
+-> untagged
+
+=== untagged ===
+Plain scene.
++ [Enter]
+    -> tagged
+=== tagged ===
+# mode: dialog
+A quiet word.
++ [Leave]
+    -> untagged
+"#,
+        );
+        let event = engine.start().unwrap();
+        let Event::Scene { mode, .. } = event else {
+            panic!("expected a scene")
+        };
+        assert_eq!(mode, "prose");
+
+        let event = engine.choose(0).unwrap();
+        let Event::Scene { mode, .. } = event else {
+            panic!("expected a scene")
+        };
+        assert_eq!(mode, "dialog");
+
+        let event = engine.choose(0).unwrap();
+        let Event::Scene { mode, .. } = event else {
+            panic!("expected a scene")
+        };
+        assert_eq!(mode, "prose");
+    }
+
+    #[test]
+    fn the_dialog_and_map_tags_name_the_scene() {
+        let mut engine = example_engine(
+            r#"
+-> keeper
+
+=== keeper ===
+# mode: dialog
+# speaker: keeper
+# mood: calm
+# image: art/shrine.png
+A quiet word.
++ [Ask]
+    -> crossroads
+=== crossroads ===
+# mode: map
+# map: valley
+Two ways down.
++ [The bridge]
+    -> keeper
++ [The scree]
+    -> keeper
+"#,
+        );
+        let event = engine.start().unwrap();
+        let Event::Scene {
+            mode,
+            speaker,
+            mood,
+            portrait,
+            map,
+            image,
+            ..
+        } = event
+        else {
+            panic!("expected a scene")
+        };
+        assert_eq!(mode, "dialog");
+        assert_eq!(speaker.as_deref(), Some("keeper"));
+        assert_eq!(mood.as_deref(), Some("calm"));
+        assert_eq!(portrait, None);
+        assert_eq!(map, None);
+        assert_eq!(image.as_deref(), Some("art/shrine.png"));
+
+        let event = engine.choose(0).unwrap();
+        let Event::Scene {
+            mode,
+            speaker,
+            portrait,
+            map,
+            ..
+        } = event
+        else {
+            panic!("expected a scene")
+        };
+        assert_eq!(mode, "map");
+        assert_eq!(speaker, None);
+        assert_eq!(portrait, None);
+        assert_eq!(map.as_deref(), Some("valley"));
+    }
+
+    #[test]
+    fn a_snapshot_restores_the_story_and_the_sheet() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL add_item(id)
+EXTERNAL spend_resource(id, amount)
+A fork.
++ [Take the key]
+    ~ add_item("key")
+    ~ spend_resource("stamina", 3)
+    -> vault
++ [Leave]
+    -> END
+=== vault ===
+# mode: dialog
+The vault.
++ [Open]
+    -> END
++ [Back]
+    -> END
+"#,
+        );
+        assert!(matches!(engine.start().unwrap(), Event::Scene { .. }));
+        let event = engine.choose(0).unwrap();
+        let Event::Scene { text, choices, .. } = &event else {
+            panic!("expected the vault scene")
+        };
+        assert!(text.join(" ").contains("The vault."));
+        assert_eq!(choices.len(), 2);
+        assert!(engine.character().has_item("key"));
+        assert_eq!(engine.character().resource("stamina"), Some(0));
+
+        let snapshot = engine.snapshot().unwrap();
+        let original = engine.choose(0).unwrap();
+
+        let event = engine.restore(&snapshot).unwrap();
+        let Event::Scene {
+            mode,
+            text,
+            choices,
+            ..
+        } = event
+        else {
+            panic!("expected the restored vault scene")
+        };
+        assert_eq!(mode, "dialog");
+        assert!(text.join(" ").contains("The vault."));
+        assert_eq!(choices.len(), 2);
+        assert!(engine.character().has_item("key"));
+        assert_eq!(engine.character().resource("stamina"), Some(0));
+
+        let restored = engine.choose(0).unwrap();
+        let (Event::TheEnd { text: original }, Event::TheEnd { text: restored }) =
+            (original, restored)
+        else {
+            panic!("expected both paths to end")
+        };
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn a_snapshot_keeps_the_dice_sequence() {
+        let data = fixture_data();
+        let mut engine = Engine::new(
+            r#"
+EXTERNAL roll_check(ability, difficulty, tags, modifier)
+A roll waits.
++ [Roll]
+    ~ roll_check("might", 7, "", 0)
+    -> END
+"#,
+            data.clone(),
+        )
+        .unwrap();
+        engine.set_seed(9);
+        assert!(matches!(engine.start().unwrap(), Event::Scene { .. }));
+        let snapshot = engine.snapshot().unwrap();
+
+        let _ = engine.choose(0).unwrap();
+        let original = engine.take_checks();
+        engine.restore(&snapshot).unwrap();
+        let _ = engine.choose(0).unwrap();
+        assert_eq!(original, engine.take_checks());
+    }
+
+    #[test]
+    fn a_snapshot_from_another_version_is_rejected() {
+        let mut engine = example_engine("A scene.\n+ [Go]\n    -> END\n");
+        assert!(engine.start().is_ok());
+        let snapshot = engine.snapshot().unwrap();
+        let future = snapshot.replace("\"version\":1", "\"version\":99");
+        let error = engine.restore(&future).unwrap_err();
+        assert!(error.to_string().contains("99"), "{error}");
+        assert!(error.to_string().contains("version"), "{error}");
     }
 
     #[test]

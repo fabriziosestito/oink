@@ -3,15 +3,7 @@
 //! Touch zones, keys, and device buttons all produce an [`Action`]. The host
 //! feeds the action to [`UiState`] and receives an [`Effect`] to execute.
 
-/// A screen the reader can show.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum View {
-    Reader,
-    Sheet,
-    Inventory,
-    Log,
-    Menu,
-}
+use crate::content::View;
 
 /// Where the focus sits in the reader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,9 +22,8 @@ pub enum BarButton {
 }
 
 impl BarButton {
-    /// The buttons the bar shows. The menu stays hidden until save and load
-    /// land.
-    pub const ALL: [Self; 3] = [Self::Sheet, Self::Inventory, Self::Log];
+    /// The buttons the bar shows, in drawing order.
+    pub const ALL: [Self; 4] = [Self::Sheet, Self::Inventory, Self::Log, Self::Menu];
     pub const COUNT: usize = Self::ALL.len();
 
     pub const fn view(self) -> View {
@@ -41,6 +32,16 @@ impl BarButton {
             Self::Inventory => View::Inventory,
             Self::Log => View::Log,
             Self::Menu => View::Menu,
+        }
+    }
+
+    /// The label drawn on the bottom bar.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Sheet => "Sheet",
+            Self::Inventory => "Inventory",
+            Self::Log => "Log",
+            Self::Menu => "Menu",
         }
     }
 }
@@ -56,8 +57,62 @@ pub enum Action {
     Back,
     PageUp,
     PageDown,
+    /// Pick a choice by zero-based index, from a number key or a tap.
+    Pick(usize),
     Open(View),
     Quit,
+}
+
+/// A host key that maps to a reader action.
+///
+/// The enum is host-agnostic: a simulator, a keyboard, and a device with
+/// buttons all translate their events to [`Key`] or send an [`Action`]
+/// directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Key {
+    Up,
+    Down,
+    Left,
+    Right,
+    Enter,
+    Backspace,
+    Escape,
+    PageUp,
+    PageDown,
+    /// A choice number from 1 to 9. Zero and values above 9 do nothing.
+    Digit(u8),
+    Sheet,
+    Inventory,
+    Log,
+    Menu,
+}
+
+impl Key {
+    /// The action for this key, or `None` when the key has no function yet.
+    ///
+    /// Digits pick a choice directly. `Escape` quits, and `Backspace` leaves
+    /// an open view. The menu key opens the save and load slots.
+    pub fn action(self) -> Option<Action> {
+        match self {
+            Self::Up => Some(Action::Up),
+            Self::Down => Some(Action::Down),
+            Self::Left => Some(Action::Left),
+            Self::Right => Some(Action::Right),
+            Self::Enter => Some(Action::Confirm),
+            Self::Backspace => Some(Action::Back),
+            Self::Escape => Some(Action::Quit),
+            Self::PageUp => Some(Action::PageUp),
+            Self::PageDown => Some(Action::PageDown),
+            Self::Digit(number) if (1..=9).contains(&number) => {
+                Some(Action::Pick(usize::from(number - 1)))
+            }
+            Self::Digit(_) => None,
+            Self::Sheet => Some(Action::Open(View::Sheet)),
+            Self::Inventory => Some(Action::Open(View::Inventory)),
+            Self::Log => Some(Action::Open(View::Log)),
+            Self::Menu => Some(Action::Open(View::Menu)),
+        }
+    }
 }
 
 /// What the host must do after an action.
@@ -157,14 +212,37 @@ impl UiState {
             }
             Action::PageUp => Effect::PageUp,
             Action::PageDown => Effect::PageDown,
+            Action::Pick(index) if self.view == View::Reader => self.pick(index),
             Action::Confirm if self.view == View::Reader => match self.focus {
                 Focus::Choices if self.choice_count > 0 => Effect::Choose(self.choice),
                 Focus::Choices => Effect::None,
                 Focus::Bar => self.open(self.highlighted_button().view()),
             },
-            Action::Up | Action::Down | Action::Left | Action::Right | Action::Confirm => {
-                Effect::None
-            }
+            Action::Up
+            | Action::Down
+            | Action::Left
+            | Action::Right
+            | Action::Confirm
+            | Action::Pick(_) => Effect::None,
+        }
+    }
+
+    /// Map one host key and apply the action. Keys with no function return
+    /// [`Effect::None`].
+    pub fn handle_key(&mut self, key: Key) -> Effect {
+        match key.action() {
+            Some(action) => self.handle(action),
+            None => Effect::None,
+        }
+    }
+
+    fn pick(&mut self, index: usize) -> Effect {
+        if index < self.choice_count {
+            self.choice = index;
+            self.focus = Focus::Choices;
+            Effect::Choose(index)
+        } else {
+            Effect::None
         }
     }
 
@@ -310,14 +388,23 @@ mod tests {
         let mut state = with_choices(1);
         state.handle(Action::Down);
         state.handle(Action::Left);
-        assert_eq!(state.highlighted_button(), BarButton::Log);
+        assert_eq!(state.highlighted_button(), BarButton::Menu);
         state.handle(Action::Right);
         assert_eq!(state.highlighted_button(), BarButton::Sheet);
     }
 
     #[test]
-    fn the_menu_is_not_on_the_bar_before_saves_land() {
-        assert!(!BarButton::ALL.contains(&BarButton::Menu));
+    fn the_menu_is_on_the_bar() {
+        assert!(BarButton::ALL.contains(&BarButton::Menu));
+        assert_eq!(BarButton::COUNT, 4);
+    }
+
+    #[test]
+    fn every_button_has_a_label() {
+        assert_eq!(BarButton::Sheet.label(), "Sheet");
+        assert_eq!(BarButton::Inventory.label(), "Inventory");
+        assert_eq!(BarButton::Log.label(), "Log");
+        assert_eq!(BarButton::Menu.label(), "Menu");
     }
 
     #[test]
@@ -336,6 +423,86 @@ mod tests {
         assert_eq!(state.handle(Action::PageUp), Effect::PageUp);
         assert_eq!(state.handle(Action::PageDown), Effect::PageDown);
         assert_eq!(state.handle(Action::Quit), Effect::Quit);
+    }
+
+    #[test]
+    fn number_keys_pick_a_choice_directly() {
+        let mut state = with_choices(3);
+        assert_eq!(state.handle_key(Key::Digit(2)), Effect::Choose(1));
+        assert_eq!(state.highlighted_choice(), 1);
+        assert_eq!(state.handle_key(Key::Digit(9)), Effect::None);
+        assert_eq!(state.handle_key(Key::Digit(0)), Effect::None);
+    }
+
+    #[test]
+    fn letter_keys_open_the_views() {
+        for (key, view) in [
+            (Key::Sheet, View::Sheet),
+            (Key::Inventory, View::Inventory),
+            (Key::Log, View::Log),
+        ] {
+            let mut state = with_choices(1);
+            assert_eq!(state.handle_key(key), Effect::Open(view));
+            assert_eq!(state.view(), view);
+            assert_eq!(state.handle_key(Key::Backspace), Effect::Close);
+            assert_eq!(state.view(), View::Reader);
+        }
+    }
+
+    #[test]
+    fn the_menu_key_opens_the_slots() {
+        let mut state = with_choices(1);
+        assert_eq!(state.handle_key(Key::Menu), Effect::Open(View::Menu));
+        assert_eq!(state.view(), View::Menu);
+        assert_eq!(state.handle_key(Key::Backspace), Effect::Close);
+        assert_eq!(state.view(), View::Reader);
+    }
+
+    #[test]
+    fn picking_outside_the_reader_does_nothing() {
+        let mut state = with_choices(3);
+        state.handle_key(Key::Sheet);
+        assert_eq!(state.handle_key(Key::Digit(1)), Effect::None);
+        assert_eq!(state.view(), View::Sheet);
+    }
+
+    #[test]
+    fn every_action_has_a_key() {
+        let keys = [
+            Key::Up,
+            Key::Down,
+            Key::Left,
+            Key::Right,
+            Key::Enter,
+            Key::Backspace,
+            Key::Escape,
+            Key::PageUp,
+            Key::PageDown,
+            Key::Digit(1),
+            Key::Sheet,
+            Key::Inventory,
+            Key::Log,
+            Key::Menu,
+        ];
+        let actions: Vec<Action> = keys.iter().filter_map(|key| key.action()).collect();
+        for expected in [
+            Action::Up,
+            Action::Down,
+            Action::Left,
+            Action::Right,
+            Action::Confirm,
+            Action::Back,
+            Action::Quit,
+            Action::PageUp,
+            Action::PageDown,
+            Action::Pick(0),
+            Action::Open(View::Sheet),
+            Action::Open(View::Inventory),
+            Action::Open(View::Log),
+            Action::Open(View::Menu),
+        ] {
+            assert!(actions.contains(&expected), "{expected:?} has no key");
+        }
     }
 
     #[test]

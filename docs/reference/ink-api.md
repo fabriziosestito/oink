@@ -57,14 +57,14 @@ Target: {difficulty("medium")}.
 | Function | Return value | Behavior |
 | --- | --- | --- |
 | `has_item(id)` | boolean | Tests ownership; false for an absent ID |
-| `add_item(id)` | void | Adds a known item and applies tag grants; adding it twice does not duplicate it |
-| `remove_item(id)` | void | Removes an owned item; absent IDs do nothing |
-| `use_item(id)` | void | Applies an owned consumable's conditions and removes it |
+| `add_item(id)` | void | Adds one unit of a known item and applies tag grants; a repeated add grows the stack |
+| `remove_item(id)` | void | Removes the whole stack of an owned item; absent IDs do nothing |
+| `use_item(id)` | void | Applies an owned consumable's conditions and removes one unit |
 
 All arguments are strings. `add_item()` and `use_item()` reject unknown definitions.
 `add_item()` also rejects gated items whose prerequisites fail.
 Using a known but absent item does nothing. Using a non-consumable does nothing.
-There are no item quantities or equipment slots.
+Items stack by ID. The engine has no equipment slots.
 
 ```ink
 EXTERNAL add_item(id)
@@ -123,6 +123,45 @@ The corridor is dark.
     The daylight hurts your eyes.
     -> END
 ```
+
+## Scene tags
+
+The engine reads the scene tags from the Ink source. A line that holds only a
+tag at the top of a knot configures that scene:
+
+```ink
+=== meeting ===
+# mode: dialog
+# speaker: guard
+# image: art/watchtower.png
+The guard leans on the wall.
++ [Talk to him]
+    -> END
+```
+
+The tags configure the whole scene, not a single line. Each tag takes an id
+after the colon, with optional spaces, and the key in any case. When a scene
+crosses several knots, the value of the last knot wins. A tag with an empty
+id does not overwrite a previous value.
+
+| Tag | Meaning |
+| --- | --- |
+| `mode: <id>` | Selects the presentation page. `prose` is the base full-text layout and is the default. |
+| `speaker: <id>` | Names the character that speaks. The player resolves the id against `ui.characters`. |
+| `mood: <id>` | Selects the portrait variant of the speaker. Reserved: the players carry the id, and no player draws variants yet. |
+| `portrait: <id>` | Overrides the portrait of the scene. Without the tag, a dialog scene shows the portrait of the speaker. |
+| `map: <id>` | Selects the map layout. The player resolves the id against `ui.maps`. |
+| `image: <path>` | Shows a picture with the scene. The path is relative to the bundle directory. |
+
+The player resolves character and map ids against the `ui.characters` and
+`ui.maps` blocks of `config.yaml`; see the
+[UI configuration reference](ui.md). An unknown id falls back to the raw id.
+A character without a portrait file draws with the name only.
+
+The `image` tag takes a file path, not an id, so a scene picture needs no
+entry in `config.yaml`. A missing or unreadable file draws no picture and
+prints one warning to stderr. The terminal player draws the picture above the
+prose. A window too short for a picture keeps all the rows for the text.
 
 ## Character values and resources
 

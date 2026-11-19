@@ -59,10 +59,20 @@ not the live character. `Rc` shares one rulebook allocation within a thread.
 | `set_seed(&mut self, seed: u64)` | `()` | Replaces the rulebook dice source with deterministic dice |
 | `take_changes(&mut self)` | `Vec<StateChange>` | Returns and empties mutation notices |
 | `take_checks(&mut self)` | `Vec<CheckRecord>` | Returns and empties check records |
+| `snapshot(&self)` | `Result<String, EngineError>` | Writes the story, the character, the dice, and the last event as one JSON save |
+| `restore(&mut self, snapshot)` | `Result<Event, EngineError>` | Loads a save into this engine and returns the scene it left |
+| `last_event(&self)` | `Option<&Event>` | The last event the story produced |
 
 Drop a character borrow before advancing or mutating the engine.
 `set_seed()` affects rulebook rolls, not Ink's own `RANDOM()` calls.
-Queues accumulate until drained. Save/load is not exposed yet.
+Queues accumulate until drained. `snapshot()` does not drain the queues;
+`restore()` clears them.
+
+The save envelope has the format version `SAVE_VERSION`, which is 1. The file
+holds the story state, the `Character`, the dice state, and the last `Event`.
+A file with another version fails with `EngineError::Save`. Restoring needs the
+same story source and rulebook: the engine keeps its compiled story and
+bindings and replaces only state. The dice state continues a seeded run.
 
 ```rust
 pub struct Choice {
@@ -71,18 +81,32 @@ pub struct Choice {
 }
 
 pub enum Event {
-    Scene { text: Vec<String>, choices: Vec<Choice> },
+    Scene {
+        mode: String,
+        speaker: Option<String>,
+        mood: Option<String>,
+        portrait: Option<String>,
+        map: Option<String>,
+        image: Option<String>,
+        text: Vec<String>,
+        choices: Vec<Choice>,
+    },
     TheEnd { text: Vec<String> },
 }
 
 pub enum EngineError {
     Compile(String),
     Story(String),
+    Save(String),
 }
 ```
 
-Text contains trimmed, nonempty output chunks. The engine does not interpret
-presentation tags yet. The host chooses its own display and input handling.
+Text contains trimmed, nonempty output chunks. `Scene.mode` is the scene mode
+from the `# mode: <id>` knot tag, and `prose` without one. `Scene.speaker`,
+`mood`, `portrait`, and `map` carry the ids of the other scene tags, or `None`
+without the tag. `Scene.image` carries the `# image: <path>` value, a file path
+relative to the bundle directory, or `None` without the tag. The host chooses its own display and input handling for each
+mode. See the [scene tags](ink-api.md#scene-tags).
 
 ## Rulebook loader
 
@@ -194,13 +218,16 @@ in-memory character and return notices.
 | Methods | Behavior |
 | --- | --- |
 | `has_item`, `has_perk`, `has_condition`, `has_ability`, `has_environment` | Test presence by ID |
+| `item_count(id)` | Returns the stack size, or 0 when the item is absent |
 | `has_tag(&rulebook, tag)` / `effective_tags(&rulebook)` | Read the combined character tags |
 | `characteristic(id)` / `resource(id)` | Return `Option<i32>` |
 | `ability_level(id)` | Returns the level, or 0 if absent |
 | `resource_max(&rulebook, id)` | Returns the effective maximum, derived when `max_from` is set |
 | `perk_ids`, `item_ids`, `condition_ids`, `environment_ids`, `ability_ids`, `tag_ids` | Iterate stored IDs |
+| `item_stacks()` | Iterates `(&String, u32)` pairs, one per carried item |
 | `add_item`, `add_perk`, `add_condition`, `enter_environment`, `add_tag` | Take `&rulebook` and an ID; return `Vec<StateChange>` |
 | `remove_item`, `remove_perk`, `remove_condition`, `clear_environment`, `remove_tag` | Take an ID; return `Vec<StateChange>` |
+| `consume_item(id, amount)` | Removes up to `amount` units and clears the stack at zero; returns a notice |
 | `add_timed_condition(&rulebook, id, Option<u32>)` | Overrides the configured duration; a changed duration returns a refresh notice |
 | `apply_grants(&rulebook)` | Adds missing grants until stable |
 | `can_spend_resource(&rulebook, id, amount)` | Tests whether a full nonnegative payment fits |
@@ -223,7 +250,7 @@ The Rust mutators currently accept unknown item, perk, condition, tag, and
 environment IDs. Callers must validate them. The Ink bindings validate additions
 of items, perks, conditions, and environments before calling those mutators.
 There is no standalone Rust `Character::use_item()` method today; the Ink
-binding composes condition application and item removal.
+binding composes condition application and `consume_item()`.
 
 ## Spell API
 
@@ -253,23 +280,46 @@ Direct Rust callers receive notices in `changes`; the engine binding queues them
 
 ## UI config
 
-`oink-ui` reads the optional presentation file and owns the shared reader
+`oink-ui` reads the `ui` block of `config.yaml` and owns the shared reader
 layout. The `config` module has no renderer dependency and is always
 compiled. The drawing modules need the default `render` feature.
 
 ```rust
 use oink_ui::UiConfig;
 
-let ui = UiConfig::from_yaml(yaml)?;
+let ui = UiConfig::from_config(config_yaml)?;
 ui.validate(&engine.data.rulebook)?;
 ```
 
-`UiConfig::from_yaml` parses the file and checks its structure.
+`UiConfig::from_config` parses the `ui` block of `config.yaml` and checks its
+structure.
 `validate` checks the resource and characteristic ids against the rulebook.
-`UiConfig::default()` is the same as a missing or empty file.
+`UiConfig::default()` is the same as a missing or empty block.
 A device player reads `reader` and `theme.eink`; the terminal player reads
-`status` and `theme.terminal`. See the [UI configuration reference](ui.md)
-for the file format.
+`reader`, `status`, and `theme.terminal`, and resolves the `characters` and
+`maps` blocks for dialog and map scenes. See the
+[UI configuration reference](ui.md) for the format.
+
+The `content` module is always compiled too. A player builds the panels and
+the pager from it:
+
+```rust
+use oink_ui::{Log, Pager, Panel, View};
+
+// The sheet at 40 columns; the pager holds 10 rows per page.
+let panel = Panel::sheet(&rulebook, &character, &reader, 40);
+let mut pager = Pager::new(panel.lines, 10);
+pager.next_page();
+
+// The session log, filled by the host from the state-change notices.
+let mut log = Log::from_config(&reader);
+log.push("item added: Brass Key");
+let panel = log.panel(40);
+```
+
+`Panel::sheet`, `Panel::inventory`, and `Panel::log` wrap to a column count;
+`Pager` splits the lines by rows and honors the panel's page breaks. `View`
+names the screens a reader shows: the story page and the three panels.
 
 ## Generated API reference
 

@@ -45,8 +45,19 @@ conditions, the level, and the keys.
 Press a key from 1 to 9 to pick a choice at once. Move the highlight with the
 arrow keys, or with j and k, and press Enter to take it. Click a choice to pick
 it. Scroll long text with PageUp, PageDown, Home, End, or the mouse wheel.
-Press Esc, q, or Ctrl-C to quit. The player captures the mouse, so plain drag
-selection does not work. Hold Shift while you drag to select text.
+Press `s`, `i`, or `l` to open the sheet, the inventory, or the log, and
+`m` for the save and load slots. Page an open panel with PageUp and PageDown,
+and press Backspace to close it. In the inventory, move the highlight with
+the arrow keys and press Enter or click an item to open its detail page.
+Page the detail page with PageUp and PageDown, and press Backspace to return
+to the list. Press Esc, q, or Ctrl-C to quit. The player
+captures the mouse, so plain drag selection does not work. Hold Shift while
+you drag to select text.
+
+The menu lists one save row and one load row for each slot. A save writes
+`saves/slot-<n>.json` beside the bundle and reports the slot. A load returns
+to the scene the slot holds. A failed save or load shows a message above the
+rows, and Backspace closes the menu.
 
 The player uses the 16 colors of the terminal palette, so it follows your
 theme. If `NO_COLOR` is set to a non-empty value, the player keeps bold,

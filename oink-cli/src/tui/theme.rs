@@ -31,16 +31,7 @@ pub struct Theme {
 }
 
 impl Theme {
-    /// Colors unless `NO_COLOR` is set to a non-empty value.
-    pub fn detect() -> Self {
-        if no_color() {
-            Self::monochrome()
-        } else {
-            Self::colored()
-        }
-    }
-
-    /// The terminal palette from `ui.yaml`. `NO_COLOR` wins over the file.
+    /// The terminal palette from `config.yaml`. `NO_COLOR` wins over the file.
     pub fn from_config(config: &TerminalTheme) -> Self {
         if no_color() {
             Self::monochrome()
