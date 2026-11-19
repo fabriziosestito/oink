@@ -1,1 +1,52 @@
+# The High Pass. The `ui` block holds the presentation settings. Every
+# field is optional.
 title: "The High Pass"
+
+ui:
+  reader:
+    items_per_page: 8
+    log_entries: 50
+    save_slots: 3
+    sheet_order: [characteristics, abilities, perks, conditions, spells]
+
+  layout:
+    top_bar:
+      resources: [focus]
+      characteristics: [intellect, psyche, physique, motorics]
+    bottom_bar:
+      buttons: [sheet, inventory, log, menu]
+
+  pages:
+    dialog:
+      top_bar:
+        height: 96
+      bottom_bar: false
+    map:
+      top_bar: false
+      bottom_bar: false
+
+  characters:
+    keeper:
+      name: The Shrine-Keeper
+    oka:
+      name: Oka
+
+  maps:
+    ravine:
+      label: The Ravine
+
+  status:
+    resources: [focus]
+    show_level: true
+    show_conditions: true
+
+  theme:
+    eink:
+      paper: 15
+      ink: 0
+      dim: 7
+      accent: 3
+    terminal:
+      text: default
+      background: default
+      accent: cyan

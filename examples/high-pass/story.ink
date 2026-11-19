@@ -78,13 +78,17 @@ One talent to claim.
 }
 
 === sheet ===
+~ add_item("climbing_rope")
 INT {characteristic("intellect")} PSY {characteristic("psyche")} PHY {characteristic("physique")} MOT {characteristic("motorics")}.
 Logic {ability_level("logic")} Empathy {ability_level("empathy")} Endurance {ability_level("endurance")}.
 Focus {resource("focus")}/{resource_max("focus")}. Level {level()}, XP {xp()}.
+A climbing rope is coiled at the top of the pack.
 + [Shoulder the pack]
     -> pass1
 
 === pass1 ===
+# mode: map
+# map: ravine
 ~ enter_environment("dark")
 The ravine is dark. Loose stones tick above.
 { passive_check("logic", 5, "", 0):
@@ -98,6 +102,15 @@ The ravine is dark. Loose stones tick above.
     { has_item("lantern"):
         Warm light. -> shrine
     }
+* [Search the cairn]
+    -> cache
+
+=== cache ===
+A flat cairn hides a climber's cache: three rations, wrapped in oilcloth.
+~ add_item("trail_ration")
+~ add_item("trail_ration")
+~ add_item("trail_ration")
+The bread is hard, and the meat will keep. -> shrine
 
 === shrine ===
 A wayside shrine, older than the guild.
@@ -110,6 +123,8 @@ Roll {check_roll()}: {outcome}.
 }
 
 === keeper ===
+# mode: dialog
+# speaker: keeper
 ~ clear_environment("dark")
 The shrine-keeper offers night-sight training, for sharp minds only.
 + { characteristic("intellect") >= 5 } [Accept eagle-eyes training]

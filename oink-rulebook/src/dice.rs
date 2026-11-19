@@ -9,6 +9,15 @@ use std::fmt;
 /// A source of dice rolls. Returns values in `1..=sides`.
 pub trait Dice {
     fn roll(&mut self, sides: u16) -> u16;
+
+    /// The current PRNG state, when the source can report it.
+    ///
+    /// A save file stores the state of the dice so that a loaded game
+    /// continues the same sequence of rolls. A source without an exportable
+    /// state returns `None`.
+    fn state(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// Error from parsing a dice notation string.
@@ -190,6 +199,10 @@ impl Dice for SeededDice {
     fn roll(&mut self, sides: u16) -> u16 {
         self.next_bounded(sides)
     }
+
+    fn state(&self) -> Option<u64> {
+        Some(self.state)
+    }
 }
 
 /// Dice seeded from the system clock and the process id.
@@ -220,6 +233,10 @@ impl Default for SystemDice {
 impl Dice for SystemDice {
     fn roll(&mut self, sides: u16) -> u16 {
         self.inner.roll(sides)
+    }
+
+    fn state(&self) -> Option<u64> {
+        self.inner.state()
     }
 }
 
@@ -335,6 +352,19 @@ mod tests {
                 let roll = dice.roll(sides);
                 assert!((1..=sides).contains(&roll));
             }
+        }
+    }
+
+    #[test]
+    fn a_saved_dice_state_continues_the_sequence() {
+        let mut dice = SeededDice::new(11);
+        for _ in 0..5 {
+            dice.roll(6);
+        }
+        let state = dice.state().expect("seeded dice report their state");
+        let mut restored = SeededDice::new(state);
+        for _ in 0..10 {
+            assert_eq!(dice.roll(20), restored.roll(20));
         }
     }
 }

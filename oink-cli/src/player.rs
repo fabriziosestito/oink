@@ -119,7 +119,7 @@ pub fn run(
                 writeln!(out, "{THE_END}")?;
                 return Ok(());
             }
-            Event::Scene { text, choices } => {
+            Event::Scene { text, choices, .. } => {
                 print_scene(out, &text, &checks, &changes, width)?;
                 print_choices(out, &choices, width)?;
                 let Some(pick) = input.pick(choices.len(), out)? else {
@@ -254,7 +254,6 @@ Inside.
             config: "title: Têst".to_string(),
             rulebook: RULEBOOK.to_string(),
             story: Story::Ink(STORY.to_string()),
-            ui: None,
         }
     }
 

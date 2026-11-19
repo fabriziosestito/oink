@@ -21,9 +21,9 @@ These were deliberate choices. Do not revisit them without a strong reason.
    - Rule definitions and starting character: **YAML** (`rulebook.yaml`).
      The game title lives in `config.yaml`.
    - A game bundle is one directory with those three fixed file names.
-     An optional `ui.yaml` sets presentation: reader page sizes, the
-     status bar, and the e-ink and terminal palettes. The engine never
-     reads it. The demo game is `examples/high-pass/`.
+     An optional `ui:` block in `config.yaml` sets presentation: reader
+     page sizes, the status bar, and the e-ink and terminal palettes. The
+     engine never reads it. The demo game is `examples/high-pass/`.
    - Checks use configurable dice profiles from YAML. The default profile rolls
      2d6 over with margin degrees and passive 6. Profiles can use d2 through
      d20 and d%, roll over or under, and define their own outcome table.
@@ -86,17 +86,19 @@ oink/
 │   │   ├── data.rs      # Config, GameData (rulebook-backed)
 │   │   ├── engine.rs    # Engine, Event, Choice + tests
 │   │   ├── external.rs  # external function bindings
+│   │   ├── tags.rs      # scene tag parsing: mode id from `# mode: <id>`
 │   │   └── markup.rs    # emphasis markup shared by players
 │   └── tests/fixtures/  # synthetic config, rulebook, and story for tests
 ├── oink-ui/             # shared reader layout and UI config for device players
-│   ├── src/             # `config` always builds; drawing needs the `render` feature
+│   ├── src/             # `config` and `content` always build; drawing needs `render`
 │   │   ├── lib.rs
-│   │   ├── config.rs    # optional ui.yaml schema, defaults, validation
-│   │   ├── metrics.rs   # screen measurements
-│   │   ├── layout.rs    # top, center, and bottom zones
+│   │   ├── config.rs    # the ui block of config.yaml: schema, defaults, validation, page overrides
+│   │   ├── content.rs   # scene lines, panels, markup, wrapping, pager
+│   │   ├── metrics.rs   # screen measurements and font sizes
+│   │   ├── layout.rs    # top, center, and bottom zones, page bar heights, dirty zones
 │   │   ├── theme.rs     # Gray4 palette
 │   │   ├── input.rs     # actions, views, and focus
-│   │   └── render.rs    # empty reader drawing
+│   │   └── render.rs    # zone chrome, top values, center page, buttons
 │   └── tests/           # Gray4 framebuffer and PGM snapshots
 ├── oink-rulebook/       # rulebook crate: checks, modifiers, resources, character state
 │   └── src/
@@ -112,15 +114,16 @@ oink/
 ├── oink-cli/            # the `oink` command: `run` plays a bundle in the terminal
 │   ├── src/
 │   │   ├── main.rs      # clap: oink run <BUNDLE_DIR> [--seed N] [--choices 1,3,2] [--plain]
-│   │   ├── bundle.rs    # reads config.yaml, rulebook.yaml, story.ink[.json], cover.png, ui.yaml
+│   │   ├── bundle.rs    # reads config.yaml, rulebook.yaml, story.ink[.json], cover.png
 │   │   ├── game.rs      # engine setup shared by both players, THE_END line
+│   │   ├── saves.rs     # numbered save slots in a `saves` directory beside the bundle
 │   │   ├── markup.rs    # emphasis markup in prose: **bold**, *italic*, _italic_
 │   │   ├── wrap.rs      # word wrap over styled fragments
 │   │   ├── player.rs    # the transcript: stdin lines and scripted picks, --plain
-│   │   ├── cover.rs     # the cover picture through ratatui-image
+│   │   ├── picture.rs   # cover, portrait, and scene pictures through ratatui-image
 │   │   └── tui/         # the full-screen player (ratatui)
 │   │       ├── mod.rs   # event loop, key and mouse mapping, terminal setup
-│   │       ├── app.rs   # state: page, highlight, scroll, status, actions
+│   │       ├── app.rs   # state: page, highlight, scroll, status, panels, actions
 │   │       ├── view.rs  # layout: header, prose column, choices, status bar
 │   │       ├── text.rs  # styled lines for prose, checks, notices, choices
 │   │       └── theme.rs # semantic styles from the 16-color palette, NO_COLOR
@@ -151,7 +154,8 @@ oink/
   `Engine::set_seed(seed)` makes rolls deterministic.
 - `Engine::start() -> Result<Event, EngineError>` /
   `Engine::choose(index) -> Result<Event, EngineError>`.
-- `Event::Scene { text, choices }` — prose paragraphs + choices to render.
+- `Event::Scene { mode, text, choices }` — prose paragraphs + choices to
+  render. `mode` is the `# mode: <id>` scene tag, `prose` by default.
 - `Event::TheEnd { text }` — story over. House flavor: the death/ending screen
   references the classic librogame line *"La tua vita e la tua missione
   terminano qui"* (Lupo Solitario). Fighting Fantasy trivia: those books had
@@ -176,14 +180,21 @@ section updated as the single source of truth):
 | `# mode: prose` | knot | default full-text gamebook rendering |
 | `# mode: dialog` | knot | portrait/name dialog layout |
 | `# mode: map` | knot | choices render as tappable map locations |
-| `# speaker: <id>` | line | character speaking (id defined in YAML) |
-| `# mood: <id>` | line | portrait variant |
-| `# portrait: <id>` | line | explicit portrait override |
-| `# map: <id>` | knot | which map layout (defined in YAML) |
+| `# speaker: <id>` | knot | character speaking (id defined in `ui.characters`) |
+| `# mood: <id>` | knot | portrait variant (carried, no player draws variants yet) |
+| `# portrait: <id>` | knot | explicit portrait override |
+| `# map: <id>` | knot | which map layout (id defined in `ui.maps`) |
+| `# image: <path>` | knot | scene picture, relative to the bundle directory |
 
-⚠️ This table is the intended contract, not yet implemented: no tag parsing
-happens in `oink-core` today (see roadmap). `bladeink` exposes tags
-(`Story::get_current_tags`, `Choice::tags`) so no runtime change is needed.
+The tags configure the whole scene: read them at the top of a knot, and the
+value of the last knot wins when a scene crosses several knots. `oink-core/src/tags.rs`
+parses all six keys and `Event::Scene` returns `mode`, `speaker`, `mood`,
+`portrait`, `map`, and `image`; `mode` defaults to `prose`. The terminal player
+draws the scene picture above the prose, the dialog name, the portrait column,
+and the map label with location markers.
+Per-line tags stay open: `bladeink` exposes tags per line
+(`Story::get_current_tags`, `Choice::tags`) and per choice, so no runtime
+change is needed, but the engine reads them per scene for now.
 
 Inline emphasis is part of the scene format too: `**bold**`, `*italic*`, and
 `_italic_` in prose and choice text, with the opening and closing rules in
@@ -218,8 +229,8 @@ theme, and deployment.
 - Rust 2021 edition, workspace-level shared dependencies.
 - Keep `oink-core` free of any display/IO concerns — it must stay
   `cargo test`-able on the host and eventually embedded-friendly.
-- Presentation settings live in `oink-ui::config` and the optional `ui.yaml`.
-  Players read them; `oink-core` never does.
+- Presentation settings live in `oink-ui::config` and the optional `ui:`
+  block of `config.yaml`. Players read them; `oink-core` never does.
 - Device rendering goes through `embedded_graphics::DrawTarget`; never code
   against the IT8951 directly in shared code. The terminal player draws with
   `ratatui` and does not use `embedded-graphics`.
@@ -257,21 +268,52 @@ theme, and deployment.
 - [x] Full-screen ratatui page: styled checks and notices, a status bar
       with resources, conditions, and level, emphasis markup in prose,
       `--plain` for the transcript.
-- [x] Optional `ui.yaml`: reader page sizes, sheet order, top bar, status
-      bar, and palettes. Parsed by `oink-ui::config`, never by `oink-core`.
-- [ ] Terminal player extras: a character sheet panel, a help overlay, and
-      a journal of past scenes.
+- [x] Optional `ui:` block in `config.yaml`: reader page sizes, sheet order,
+      top bar, status bar, and palettes. Parsed by `oink-ui::config`, never
+      by `oink-core`.
+- [x] Per-page layout resolution: `ui.layout` base layout, `ui.pages.<id>`
+      overrides that merge field by field and can remove a bar, and zone
+      dirty flags for partial e-ink refreshes.
+- [x] Center page: wrapped prose through the markup parser, check records,
+      numbered choices, and the pager.
+- [x] Reader bars: resource and characteristic values on top, and the sheet,
+      inventory, and log buttons below.
+- [x] Paged character sheet: one page per configured group, with spell
+      ability and cost.
+- [x] Paged inventory: name and weight, grouped by the configured item count.
+- [x] Session log: a host-side ring buffer with a newest-first paged view.
+- [x] Touch targets: choice rows, page arrows, bar buttons, and the back
+      label.
+- [x] Inventory stacks: repeated items keep a count, and the inventory panel
+      shows it.
+- [x] Inventory detail pages: the arrow keys select an item, Enter or a click
+      opens its description, weight, tags, consumable flag, modifiers, and
+      picture, and Backspace returns to the list.
+- [x] Scene and item pictures: `# image: <path>` on a knot and `image:` on an
+      item in `rulebook.yaml`, both relative to the bundle directory.
+- [ ] Terminal player extras: a help overlay and a journal of past scenes.
+- [x] Terminal player panels: the sheet, the inventory, and the session log
+      open with the `s`, `i`, and `l` keys, page with PgUp/PgDn and the wheel,
+      and close with Backspace. The log feeds from the state-change notices.
+- [x] Save and load slots: `Engine::snapshot()` and `Engine::restore()` write
+      and read a versioned JSON envelope of story, character, and dice state.
+      The `m` key opens the menu, which saves and loads numbered slots in
+      `saves/` beside the bundle.
 - [ ] `players/m5paper` firmware crate (esp-idf, it8951, GT911 touch, SD/flash
       bundle loading; espup toolchain).
 - [ ] A cover picture for `examples/high-pass` (`cover.png`).
 - [ ] More e-ink hardware targets beyond the M5Paper.
 - [ ] Mobile builds (iOS, Android).
-- [ ] Tag parsing in `oink-core` (`mode`, `speaker`, ...) — extend
-      `Event::Scene` with mode + per-line speaker.
+- [x] Mode tag parsing in `oink-core`: `Event::Scene` returns the mode id.
+      Per-line speaker tags (`speaker`, `mood`, `portrait`) still open.
 - [x] External functions (inventory/perks/conditions/tags/checks/environments/
       resources) bound into Ink via `bladeink`'s `bind_external_function`.
-- [ ] Dialog and map renderers in the UI layer.
-- [ ] Characters/maps YAML schemas.
+- [x] Dialog and map renderers in the terminal player: speaker name, portrait
+      column, map label, location markers. Device renderers wait for the
+      M5Paper crate.
+- [x] Character names and portraits and map labels in the `ui` block of
+      `config.yaml`.
+- [ ] Full characters/maps YAML schemas (portrait variants, map geometry).
 - [x] Spells module with cost and cast resolution.
-- [ ] Story and world state (flags, counters) and save/load (issue #2).
+- [ ] Story and world state (flags, counters).
 - [x] Pig mascot + logo (`assets/logo.png`, hi-res in `assets/logo-hires.png`).

@@ -19,7 +19,7 @@ pub struct Character {
     abilities: BTreeMap<String, i32>,
     perks: BTreeSet<String>,
     conditions: BTreeMap<String, Option<u32>>,
-    inventory: BTreeSet<String>,
+    inventory: BTreeMap<String, u32>,
     tags: BTreeSet<String>,
     environments: BTreeSet<String>,
     resources: BTreeMap<String, i32>,
@@ -28,8 +28,9 @@ pub struct Character {
 
 The fields are private. Use the [Rust API](rust-api.md) or the [Ink API](ink-api.md)
 to read and change them. Conditions store remaining scene counts; `None` means
-the condition lasts until removed. Environments are stored here today even though
-they describe the environment.
+the condition lasts until removed. The inventory maps each item ID to its
+count, so repeated items form a stack. Environments are stored here today even
+though they describe the environment.
 
 ## Scene boundaries
 
@@ -124,6 +125,9 @@ the host drains them; the queue does not reset at scene boundaries.
 Re-adding an active condition with a different duration emits
 `StateChange::ConditionRefreshed`; the same duration emits nothing.
 The terminal player prints check records and state-change notices under each scene.
+It also records the notices in the session log, a ring buffer capped by
+`ui.reader.log_entries`. The `l` key opens the log panel, which lists the
+entries newest first.
 
 ## Story facts and saving
 
@@ -132,5 +136,26 @@ They can last across scenes and chapters. `StateChange` notices are not story
 memory, and oink has no separate world-flags API today.
 
 Bladeink owns the story variables, current choices, and execution position.
-Oink owns the character sheet and dice source. Oink does not yet expose a
-combined save/load API. Persistence is tracked separately from rulebook work.
+Oink owns the character sheet and the dice source. `Engine::snapshot()` writes
+all four to one JSON save file, and `Engine::restore()` reads it back:
+
+```rust
+let text = engine.snapshot()?;          // one JSON string
+let event = engine.restore(&text)?;     // the scene the save left
+```
+
+The file is a versioned envelope. Version 1 holds the story state, the
+`Character`, the dice state, and the last `Event`. A file from another version
+fails with `EngineError::Save` and leaves the engine unchanged. Restoring
+replaces only story and character state: the engine keeps the loaded story
+source, the rulebook, and the Ink function bindings, so a save must load with
+the same bundle. Pending change and check queues are cleared.
+
+A save keeps the dice repeatable. The restored dice continue the same roll
+sequence when the engine set a seed, so a loaded game follows the same path as
+the original. The terminal player saves to numbered slots in a `saves`
+directory beside the bundle: `saves/slot-1.json`, `saves/slot-2.json`, and so
+on, up to `ui.reader.save_slots`. Press `m` to open the menu. Each slot has a
+save row and a load row. A save stays in the menu and reports its slot; a load
+returns to the restored scene. A failed save or load reports a message and
+keeps the menu open.

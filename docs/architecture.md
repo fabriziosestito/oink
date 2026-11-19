@@ -19,7 +19,7 @@ oink-cli
   -> oink-ui (config only, no renderer)
 
 oink-ui
-  -> oink-core (rulebook ids in ui.yaml)
+  -> oink-core (rulebook ids in the ui block)
   -> embedded-graphics (optional, `render` feature)
 ```
 
@@ -35,14 +35,23 @@ Rulebook operations perform the character mutations.
 `oink-cli` is the first player. It builds the `oink` command, whose `run`
 subcommand reads a game bundle from disk and plays it in the terminal.
 A bundle is one directory with `config.yaml`, `rulebook.yaml`, and `story.ink`
-or a precompiled `story.ink.json`, plus an optional `cover.png` and an optional
-`ui.yaml`.
+or a precompiled `story.ink.json`, plus an optional `cover.png`.
 In a terminal the player draws a full-screen page with ratatui: the prose in a
 centered column, the check records and state notices under it, the choices
 below, and a status bar with the character resources, conditions, and level.
 Picks come from keys 1 to 9, the arrow keys with Enter, or mouse clicks.
-The cover shows through ratatui-image, as a picture in terminals with the
-Kitty, iTerm2, or Sixel graphics protocol and as Unicode half blocks elsewhere.
+The keys `s`, `i`, and `l` open the character sheet, the inventory, and the
+session log as paged panels over the page; Backspace closes the open panel,
+and the wheel or PgUp/PgDn turn its pages. In the inventory the arrow keys
+select an item, and Enter or a click opens its detail page with the
+description, weight, tags, consumable flag, modifiers, and picture.
+A dialog scene draws the speaker name above the prose and the speaker portrait
+in a left column, when the bundle configures a portrait file. A map scene
+draws the map label above the location choices and marks each choice with a
+location glyph.
+The cover, the portraits, and the scene and item pictures show through
+ratatui-image, as pictures in terminals with the Kitty, iTerm2, or Sixel
+graphics protocol and as Unicode half blocks elsewhere.
 When stdin or stdout is not a terminal, or with `--plain`, the player prints a
 transcript and reads one pick per line.
 The `--seed` and `--choices` flags make a run repeatable without input.
@@ -55,16 +64,38 @@ the text through unchanged, and every player applies the same parser.
 `oink-ui` is the shared reader layout for device players. It owns the three
 zones, the pager, and the sheet, inventory, and log views. It draws through
 `embedded-graphics` `DrawTarget` and has no file, network, or terminal access.
-Ports supply screen metrics, input events, and storage.
+Ports supply screen metrics, input events, and storage. A page without a bar
+gives its space to the center, and `DirtyZones` reports the zones whose
+geometry changed between two frames for a partial e-ink refresh.
 
-The `oink-ui::config` module is always compiled. It parses the optional
-`ui.yaml` into page sizes, sheet order, top-bar values, status settings, and
-palettes. It validates the rulebook ids and other references. The drawing
-modules sit behind the default `render` feature, so a player that needs only
-the presentation settings can use `oink-ui` without `embedded-graphics`.
-The terminal player does that: it reads the status and terminal theme blocks
-and draws with ratatui. `oink-core` never reads `ui.yaml`.
+The `oink-ui::config` module is always compiled. It parses the optional `ui`
+block of `config.yaml` into page sizes, sheet order, the base layout with its
+top and bottom bars, the per-mode page overrides, the character names and
+portrait files, the map labels, status settings, and palettes.
+`resolve_page(mode)` merges a mode's `pages` block into the base
+layout, so a page can drop a bar or resize it, and an unknown mode falls back
+to the base layout with a warning. It validates the rulebook ids and other
+references. The drawing modules sit behind the default `render` feature, so
+a player that needs only the presentation settings can use `oink-ui`
+without `embedded-graphics`.
+The terminal player does that: it reads the reader, status, and terminal
+theme blocks and draws with ratatui. `oink-core` never reads the `ui` block.
 See the [UI configuration reference](reference/ui.md).
+
+The `oink-ui::content` module is always compiled too. It turns an engine event
+into wrapped lines through the shared markup parser, keeps the scene mode,
+the speaker, mood, portrait, map, and image values, puts check records before
+the numbered choices, and paginates the result with `Pager`. It also reads the
+top-bar values from the character sheet and builds the character-sheet panel,
+one page per configured group, the inventory panel, one page per configured
+item count, and the log panel from a host-side ring buffer. The renderer uses
+ProFont and `Metrics` to fit the lines in the center zone, fills the top bar
+with the resource and characteristic values, draws the page controls, and
+fills the bottom bar with the sheet, inventory, and log buttons. The focused
+button draws inverted. Every draw reports its touch targets: the choice rows,
+the page arrows, the bar buttons, and the back label. The terminal player
+keeps its ratatui drawing and reuses the panels, the pager, and the log from
+`content`. A device player uses both modules.
 
 Each player is a separate crate with its own binary. Device players will live
 under `players/`, with the M5Paper first. Their shared layout is `oink-ui`.
@@ -142,9 +173,23 @@ The story calls `end_scene()` to advance condition durations. The engine does
 not infer scene boundaries from choices, knots, or output chunks.
 This keeps story structure independent of condition lifetime.
 
-There is no combined save/load API today. Future core persistence must account
-for bladeink state, character state, active environments, and the rulebook dice
-position. UI notification queues are not a substitute for that snapshot.
+`Engine::snapshot()` writes one JSON save envelope. It holds the bladeink story
+state, the `Character` (including environments and resources), the dice state,
+and the last `Event`. `Engine::restore()` loads the envelope into the same
+engine and returns the saved event, so the player can redraw the scene.
+
+The envelope carries `SAVE_VERSION`, which is 1 today. A file with another
+version is rejected. Restoring needs the same bundle and story source: the
+engine keeps its compiled story, rulebook, and Ink bindings, and only replaces
+state. The dice state keeps a seeded run repeatable across a save.
+
+The host owns the files. The terminal player writes `saves/slot-<n>.json`
+beside the bundle, with one file per numbered slot up to
+`ui.reader.save_slots`. UI notification queues are not part of the save; the
+session log and the notices restart empty on load.
+
+Story facts that must survive a save belong in Ink variables. Pending changes
+and checks are drained before a save in the normal player loop.
 
 ## Design records
 

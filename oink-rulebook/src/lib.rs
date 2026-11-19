@@ -1493,6 +1493,57 @@ starting_character:
     }
 
     #[test]
+    fn items_stack_and_leave_by_unit() {
+        let yaml = r#"
+items:
+  potion: { name: Potion }
+  rope: { name: Rope }
+starting_character:
+  inventory: [rope]
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::from_starting(&rulebook);
+
+        assert_eq!(character.item_count("rope"), 1);
+        assert!(character.has_item("rope"));
+
+        character.add_item(&rulebook, "rope");
+        assert_eq!(character.item_count("rope"), 2);
+        let stacks: Vec<(&str, u32)> = character
+            .item_stacks()
+            .map(|(id, count)| (id.as_str(), count))
+            .collect();
+        assert_eq!(stacks, vec![("rope", 2)]);
+
+        let changes = character.consume_item("rope", 1);
+        assert_eq!(changes, vec![StateChange::ItemRemoved("rope".to_string())]);
+        assert_eq!(character.item_count("rope"), 1);
+        assert!(character.has_item("rope"));
+
+        character.remove_item("rope");
+        assert!(!character.has_item("rope"));
+        assert_eq!(character.item_count("rope"), 0);
+    }
+
+    #[test]
+    fn consuming_the_last_unit_clears_the_item() {
+        let yaml = r#"
+items:
+  potion: { name: Potion }
+starting_character:
+  inventory: [potion, potion]
+"#;
+        let rulebook = Rulebook::load(yaml).expect("loads").rulebook;
+        let mut character = Character::from_starting(&rulebook);
+        assert_eq!(character.item_count("potion"), 2);
+
+        character.consume_item("potion", 1);
+        assert_eq!(character.item_count("potion"), 1);
+        character.consume_item("potion", 1);
+        assert!(!character.has_item("potion"));
+    }
+
+    #[test]
     fn loader_reports_validation_errors() {
         let yaml = r#"
 abilities:

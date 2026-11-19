@@ -178,14 +178,19 @@ condition expires or when a scene ends.
 
 ## Items
 
-Items accept `name`, `description`, `tags`, `modifiers`, a nonnegative integer
-`weight` (default 0), `consumable` (default false), and `applies_conditions`.
-Each condition in `applies_conditions` must exist in the rulebook.
+Items accept `name`, `description`, `image`, `tags`, `modifiers`, a
+nonnegative integer `weight` (default 0), `consumable` (default false), and
+`applies_conditions`. Each condition in `applies_conditions` must exist in the
+rulebook. `image` is a picture file, relative to the bundle directory. A
+player that draws pictures shows it on the item detail page. A missing or
+unreadable file draws no picture.
 
 ```yaml
 items:
   climbing_rope:
     name: Climbing Rope
+    description: Hemp rope, dry and strong.
+    image: art/rope.png
     weight: 2
     tags: [tool]
     modifiers:
@@ -200,10 +205,12 @@ conditions:
     duration: 2
 ```
 
-Inventory stores unique item IDs. It has no quantities or equipment slots.
-Carried items supply modifiers and tags. Weight is metadata; the engine does
-not enforce a carrying limit. `use_item()` applies conditions and removes an
-owned consumable. An absent item or a non-consumable is left unchanged.
+Inventory stores item IDs with a count for each one. Repeated additions form a
+stack. It has no equipment slots. Carried items supply modifiers and tags.
+Weight is metadata; the engine does not enforce a carrying limit.
+`use_item()` applies conditions and consumes one owned unit of a consumable.
+An absent item or a non-consumable is left unchanged. `remove_item()` drops
+the whole stack.
 
 ## Tags and grants
 

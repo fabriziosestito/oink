@@ -1,6 +1,7 @@
 //! Mutable character state and change events.
 
 use crate::model::{CreationPools, Rulebook};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -45,13 +46,13 @@ impl fmt::Display for StateChange {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Character {
     characteristics: BTreeMap<String, i32>,
     abilities: BTreeMap<String, i32>,
     perks: BTreeSet<String>,
     conditions: BTreeMap<String, Option<u32>>,
-    inventory: BTreeSet<String>,
+    inventory: BTreeMap<String, u32>,
     tags: BTreeSet<String>,
     environments: BTreeSet<String>,
     resources: BTreeMap<String, i32>,
@@ -89,7 +90,7 @@ impl CreationPointKind {
 }
 
 /// Points spent from each creation pool.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreationSpent {
     pub characteristics: u32,
     pub abilities: u32,
@@ -126,7 +127,10 @@ impl Character {
 
         character.tags = starting.tags.iter().cloned().collect();
         character.perks = starting.perks.iter().cloned().collect();
-        character.inventory = starting.inventory.iter().cloned().collect();
+        character.inventory.clear();
+        for id in &starting.inventory {
+            *character.inventory.entry(id.clone()).or_insert(0) += 1;
+        }
 
         for (id, definition) in &rulebook.resources {
             let max = definition.derived_max(&character.characteristics);
@@ -149,7 +153,12 @@ impl Character {
     }
 
     pub fn has_item(&self, id: &str) -> bool {
-        self.inventory.contains(id)
+        self.inventory.contains_key(id)
+    }
+
+    /// How many units of `id` the character carries. Zero for an absent item.
+    pub fn item_count(&self, id: &str) -> u32 {
+        self.inventory.get(id).copied().unwrap_or(0)
     }
 
     pub fn has_perk(&self, id: &str) -> bool {
@@ -196,7 +205,12 @@ impl Character {
     }
 
     pub fn item_ids(&self) -> impl Iterator<Item = &String> {
-        self.inventory.iter()
+        self.inventory.keys()
+    }
+
+    /// Every carried item with its count, sorted by ID.
+    pub fn item_stacks(&self) -> impl Iterator<Item = (&String, u32)> {
+        self.inventory.iter().map(|(id, count)| (id, *count))
     }
 
     pub fn condition_ids(&self) -> impl Iterator<Item = &String> {
@@ -229,7 +243,7 @@ impl Character {
                 tags.extend(condition.grants_tags.iter().cloned());
             }
         }
-        for id in &self.inventory {
+        for id in self.inventory.keys() {
             if let Some(item) = rulebook.items.get(id) {
                 tags.extend(item.tags.iter().cloned());
             }
@@ -275,21 +289,39 @@ impl Character {
         changes
     }
 
+    /// Add one unit of `id`. A second unit of the same item grows the stack.
     pub fn add_item(&mut self, rulebook: &Rulebook, id: &str) -> Vec<StateChange> {
         let mut changes = Vec::new();
-        if self.inventory.insert(id.to_string()) {
-            changes.push(StateChange::ItemAdded(id.to_string()));
-        }
+        let count = self.inventory.entry(id.to_string()).or_insert(0);
+        *count = count.saturating_add(1);
+        changes.push(StateChange::ItemAdded(id.to_string()));
         changes.extend(self.apply_grants(rulebook));
         changes
     }
 
+    /// Remove the whole stack of `id`.
     pub fn remove_item(&mut self, id: &str) -> Vec<StateChange> {
-        if self.inventory.remove(id) {
+        if self.inventory.remove(id).is_some() {
             vec![StateChange::ItemRemoved(id.to_string())]
         } else {
             Vec::new()
         }
+    }
+
+    /// Remove `amount` units of `id`. The item leaves the inventory when the
+    /// stack reaches zero. A non-zero removal emits one record.
+    pub fn consume_item(&mut self, id: &str, amount: u32) -> Vec<StateChange> {
+        if amount == 0 {
+            return Vec::new();
+        }
+        let Some(count) = self.inventory.get_mut(id) else {
+            return Vec::new();
+        };
+        *count = count.saturating_sub(amount);
+        if *count == 0 {
+            self.inventory.remove(id);
+        }
+        vec![StateChange::ItemRemoved(id.to_string())]
     }
 
     pub fn add_perk(&mut self, rulebook: &Rulebook, id: &str) -> Vec<StateChange> {

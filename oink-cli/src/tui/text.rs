@@ -4,6 +4,7 @@
 use oink_core::markup::Run;
 use oink_core::oink_rulebook::RollKind;
 use oink_core::CheckRecord;
+use oink_ui::Tone;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -136,18 +137,23 @@ pub fn notice_lines(notice: &Notice, width: usize, theme: &Theme) -> Vec<Line<'s
 }
 
 /// One numbered choice, wrapped, continuation lines indented under the
-/// text. The selected choice is highlighted across the full width.
+/// text. The selected choice is highlighted across the full width. A map
+/// choice carries a location marker before the text.
 pub fn choice_lines(
     number: usize,
     runs: &[Run],
     selected: bool,
+    marker: bool,
     width: usize,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
     let label = format!("{}. ", number + 1);
     let indent = label.chars().count();
     let text_width = width.saturating_sub(indent).max(1);
-    let pieces = pieces(runs, theme.choice);
+    let mut pieces = pieces(runs, theme.choice);
+    if marker {
+        pieces.insert(0, ("◆ ", theme.choice_number));
+    }
     let mut lines = Vec::new();
     for (index, line) in wrap::wrap(&pieces, text_width).into_iter().enumerate() {
         let mut spans = Vec::with_capacity(line.len() + 1);
@@ -174,6 +180,32 @@ pub fn choice_lines(
         lines.push(line);
     }
     lines
+}
+
+/// One panel line: the shared content line mapped to the theme.
+///
+/// The tone picks the style: body text reads as prose, secondary text as a
+/// hint, and headings as the title. The emphasis markup stays.
+pub fn panel_line(line: &oink_ui::Line, theme: &Theme) -> Line<'static> {
+    let spans: Vec<Span<'static>> = line
+        .spans
+        .iter()
+        .map(|span| {
+            let mut style = match span.tone {
+                Tone::Ink => theme.prose,
+                Tone::Dim => theme.hint,
+                Tone::Accent => theme.title,
+            };
+            if span.emphasis.bold {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            if span.emphasis.italic {
+                style = style.add_modifier(Modifier::ITALIC);
+            }
+            Span::styled(span.text.clone(), style)
+        })
+        .collect();
+    Line::from(spans)
 }
 
 /// The status bar: resources, conditions, and the level on the left, and
@@ -346,22 +378,58 @@ mod tests {
     }
 
     #[test]
+    fn panel_lines_take_their_tone_and_emphasis() {
+        use oink_ui::Panel;
+        let theme = Theme::colored();
+        let lines = Panel::log(["entry"], 40).lines;
+        assert_eq!(lines.len(), 1);
+        let drawn = panel_line(&lines[0], &theme);
+        assert_eq!(
+            drawn.spans[0].style, theme.prose,
+            "body text reads as prose"
+        );
+
+        let heading = oink_ui::Span {
+            text: "Characteristics".to_string(),
+            emphasis: oink_core::markup::Emphasis::default(),
+            tone: Tone::Accent,
+        };
+        let line = oink_ui::Line {
+            spans: vec![heading],
+            choice: None,
+            item: None,
+            page_break: false,
+        };
+        let drawn = panel_line(&line, &theme);
+        assert_eq!(drawn.spans[0].style, theme.title);
+    }
+
+    #[test]
     fn choices_number_the_first_line_and_indent_the_rest() {
         let theme = Theme::colored();
         let runs = markup::parse("Open the heavy door and step through");
-        let lines = choice_lines(0, &runs, false, 20, &theme);
+        let lines = choice_lines(0, &runs, false, false, 20, &theme);
         assert_eq!(
             lines.iter().map(text).collect::<Vec<String>>(),
             vec!["1. Open the heavy", "   door and step", "   through"]
         );
         assert_eq!(lines[0].spans[0].style, theme.choice_number);
 
-        let selected = choice_lines(1, &runs, true, 20, &theme);
+        let selected = choice_lines(1, &runs, true, false, 20, &theme);
         assert!(selected.iter().all(|line| line.width() == 20));
         assert!(selected[0]
             .spans
             .iter()
             .all(|span| span.style.add_modifier.contains(Modifier::REVERSED)));
+    }
+
+    #[test]
+    fn a_map_choice_carries_the_location_marker() {
+        let theme = Theme::colored();
+        let runs = markup::parse("The rope bridge");
+        let lines = choice_lines(0, &runs, false, true, 40, &theme);
+        assert_eq!(text(&lines[0]), "1. ◆ The rope bridge");
+        assert_eq!(lines[0].spans[1].style, theme.choice_number);
     }
 
     #[test]

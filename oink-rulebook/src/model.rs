@@ -1,7 +1,7 @@
 //! Resource definitions loaded from `rulebook.yaml`.
 
 use crate::names::Names;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// A set of flat modifiers to characteristics, abilities, and check tags.
@@ -197,6 +197,10 @@ pub struct Item {
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
+    /// A picture of the item, relative to the bundle directory. A player
+    /// that draws pictures loads it when the inventory shows the item.
+    #[serde(default)]
+    pub image: Option<String>,
     #[serde(default)]
     pub weight: u32,
     #[serde(default)]
@@ -593,7 +597,7 @@ pub struct CreationBase {
 }
 
 /// Points to spend on top of the base.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct CreationPools {
     pub characteristic_points: u32,

@@ -9,4 +9,5 @@ bladeink.workspace = true
 bladeink-compiler.workspace = true
 oink-rulebook = { path = "../oink-rulebook" }
 serde.workspace = true
+serde_json.workspace = true
 serde_yaml.workspace = true

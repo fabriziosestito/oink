@@ -17,7 +17,7 @@ pub struct Theme {
 }
 
 impl Theme {
-    /// Build the palette from the `theme.eink` block of `ui.yaml`.
+    /// Build the palette from the `theme.eink` block of `config.yaml`.
     pub fn from_config(config: &EinkTheme) -> Self {
         Self {
             paper: Gray4::new(config.paper),
