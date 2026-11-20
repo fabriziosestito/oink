@@ -218,6 +218,7 @@ items:
   rusty_cleaver:
     name: Rusty Cleaver
     description: Heavy, and not clean.
+    image: art/cleaver.pgm
     weight: 3
     tags: [weapon, tool]
     modifiers:
@@ -226,6 +227,7 @@ items:
   climbing_rope:
     name: Climbing Rope
     description: Coiled hemp, dry enough to trust.
+    image: art/rope.pgm
     weight: 2
     tags: [tool]
     modifiers:

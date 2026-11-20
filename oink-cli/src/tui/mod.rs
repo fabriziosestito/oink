@@ -10,6 +10,7 @@ mod view;
 use std::collections::HashMap;
 use std::error::Error;
 use std::io;
+use std::path::Path;
 
 use image::DynamicImage;
 use oink_core::Engine;
@@ -100,7 +101,7 @@ fn play(
         let image = match app.image_path().map(str::to_string) {
             Some(path) => {
                 if !images.contains_key(&path) {
-                    images.insert(path.clone(), load_image(bundle, &painter, &path));
+                    images.insert(path.clone(), load_image(&bundle.dir, &painter, &path));
                 }
                 images.get_mut(&path).and_then(|picture| picture.as_mut())
             }
@@ -128,8 +129,8 @@ fn load_portrait(bundle: &Bundle, app: &App, painter: &Painter, id: &str) -> Opt
 }
 
 /// A scene or item picture, when its file reads.
-fn load_image(bundle: &Bundle, painter: &Painter, path: &str) -> Option<Picture> {
-    let path = bundle.dir.join(path);
+fn load_image(dir: &Path, painter: &Painter, path: &str) -> Option<Picture> {
+    let path = dir.join(path);
     match image::open(&path) {
         Ok(picture) => Some(painter.view(picture)),
         Err(error) => {
@@ -266,5 +267,49 @@ mod tests {
             Some(Action::ScrollDown(WHEEL_ROWS))
         );
         assert_eq!(action(TermEvent::Resize(80, 24)), None);
+    }
+
+    #[test]
+    fn a_pnm_scene_image_loads_and_draws() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let dir = std::env::temp_dir().join(format!(
+            "oink-image-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(dir.join("art")).unwrap();
+        std::fs::write(
+            dir.join("art/test.pgm"),
+            "P2\n# a tiny gradient\n3 2\n255\n0 127 255\n255 127 0\n",
+        )
+        .unwrap();
+
+        let painter = Painter::halfblocks();
+        let mut picture = load_image(&dir, &painter, "art/test.pgm").expect("the ASCII PGM loads");
+        let mut terminal = Terminal::new(TestBackend::new(8, 4)).unwrap();
+        terminal
+            .draw(|frame| picture.render(frame, frame.area()))
+            .unwrap();
+
+        // The Unicode fallback paints half blocks, so the picture is visible
+        // even when the terminal has no graphics protocol.
+        let drawn: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(
+            drawn.contains('▀') || drawn.contains('▄'),
+            "the picture draws half blocks: {drawn:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

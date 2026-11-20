@@ -318,8 +318,13 @@ impl Engine {
 
     fn resume(&mut self) -> Result<Event, EngineError> {
         let mut text = Vec::new();
+        let mut tags = Vec::new();
         while self.story.can_continue() {
             let line = self.story.cont()?;
+            // The runtime keeps the tags of the line just read, so read them
+            // before the next line clears them. Tags of a later knot come
+            // last and win.
+            tags.extend(self.story.get_current_tags()?);
             let line = line.trim();
             if !line.is_empty() {
                 text.push(line.to_string());
@@ -337,7 +342,6 @@ impl Engine {
         let event = if choices.is_empty() {
             Event::TheEnd { text }
         } else {
-            let tags = self.story.get_current_tags()?;
             Event::Scene {
                 mode: mode_from_tags(&tags).unwrap_or_else(|| DEFAULT_MODE.to_string()),
                 speaker: speaker_from_tags(&tags),
@@ -814,6 +818,46 @@ Two ways down.
         assert_eq!(speaker, None);
         assert_eq!(portrait, None);
         assert_eq!(map.as_deref(), Some("valley"));
+    }
+
+    #[test]
+    fn a_tag_holds_for_every_paragraph_of_a_scene() {
+        let mut engine = example_engine(
+            r#"
+-> start
+
+=== start ===
+A word.
++ [Go on]
+    -> long
+
+=== long ===
+# mode: dialog
+# speaker: keeper
+# image: art/shrine.png
+The first paragraph.
+And a second paragraph.
+And a third one, still in the same scene.
++ [Leave]
+    -> start
+"#,
+        );
+        engine.start().unwrap();
+        let event = engine.choose(0).unwrap();
+        let Event::Scene {
+            mode,
+            speaker,
+            image,
+            text,
+            ..
+        } = event
+        else {
+            panic!("expected a scene")
+        };
+        assert_eq!(text.len(), 3, "the scene keeps every paragraph");
+        assert_eq!(mode, "dialog");
+        assert_eq!(speaker.as_deref(), Some("keeper"));
+        assert_eq!(image.as_deref(), Some("art/shrine.png"));
     }
 
     #[test]

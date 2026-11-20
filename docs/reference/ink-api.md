@@ -159,9 +159,10 @@ The player resolves character and map ids against the `ui.characters` and
 A character without a portrait file draws with the name only.
 
 The `image` tag takes a file path, not an id, so a scene picture needs no
-entry in `config.yaml`. A missing or unreadable file draws no picture and
-prints one warning to stderr. The terminal player draws the picture above the
-prose. A window too short for a picture keeps all the rows for the text.
+entry in `config.yaml`. The file can be a PNG, a PGM, or a PPM. A missing or
+unreadable file draws no picture and prints one warning to stderr. The
+terminal player draws the picture above the prose. A window too short for a
+picture keeps all the rows for the text.
 
 ## Character values and resources
 

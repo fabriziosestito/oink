@@ -74,6 +74,23 @@ fn the_cairn_cache_adds_a_stack_of_rations() {
 }
 
 #[test]
+fn the_demo_images_load() {
+    let example = example();
+    for path in [
+        "art/cleaver.pgm",
+        "art/pass.pgm",
+        "art/ravine.png",
+        "art/rope.pgm",
+        "art/shrine.png",
+    ] {
+        let image = image::open(example.join(path))
+            .unwrap_or_else(|error| panic!("{path} does not load: {error}"));
+        assert!(image.width() > 0, "{path} has no width");
+        assert!(image.height() > 0, "{path} has no height");
+    }
+}
+
+#[test]
 fn the_same_seed_gives_the_same_transcript() {
     let example = example();
     let args = [
