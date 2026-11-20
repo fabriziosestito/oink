@@ -78,7 +78,11 @@ One talent to claim.
 }
 
 === sheet ===
+# image: art/pass.pgm
 ~ add_item("climbing_rope")
+{ not has_item("rusty_cleaver"):
+    ~ add_item("rusty_cleaver")
+}
 INT {characteristic("intellect")} PSY {characteristic("psyche")} PHY {characteristic("physique")} MOT {characteristic("motorics")}.
 Logic {ability_level("logic")} Empathy {ability_level("empathy")} Endurance {ability_level("endurance")}.
 Focus {resource("focus")}/{resource_max("focus")}. Level {level()}, XP {xp()}.
@@ -89,6 +93,7 @@ A climbing rope is coiled at the top of the pack.
 === pass1 ===
 # mode: map
 # map: ravine
+# image: art/ravine.png
 ~ enter_environment("dark")
 The ravine is dark. Loose stones tick above.
 { passive_check("logic", 5, "", 0):
@@ -125,6 +130,7 @@ Roll {check_roll()}: {outcome}.
 === keeper ===
 # mode: dialog
 # speaker: keeper
+# image: art/shrine.png
 ~ clear_environment("dark")
 The shrine-keeper offers night-sight training, for sharp minds only.
 + { characteristic("intellect") >= 5 } [Accept eagle-eyes training]

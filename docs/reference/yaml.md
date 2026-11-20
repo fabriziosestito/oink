@@ -181,9 +181,9 @@ condition expires or when a scene ends.
 Items accept `name`, `description`, `image`, `tags`, `modifiers`, a
 nonnegative integer `weight` (default 0), `consumable` (default false), and
 `applies_conditions`. Each condition in `applies_conditions` must exist in the
-rulebook. `image` is a picture file, relative to the bundle directory. A
-player that draws pictures shows it on the item detail page. A missing or
-unreadable file draws no picture.
+rulebook. `image` is a picture file, relative to the bundle directory. It can
+be a PNG, a PGM, or a PPM. A player that draws pictures shows it on the item
+detail page. A missing or unreadable file draws no picture.
 
 ```yaml
 items:

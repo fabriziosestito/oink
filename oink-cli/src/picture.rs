@@ -45,6 +45,14 @@ impl Painter {
         }
     }
 
+    /// A painter with the Unicode half-block fallback, for tests.
+    #[cfg(test)]
+    pub(crate) fn halfblocks() -> Self {
+        Self {
+            picker: Picker::halfblocks(),
+        }
+    }
+
     /// Prepare `picture` for drawing.
     pub fn view(&self, picture: DynamicImage) -> Picture {
         Picture {
