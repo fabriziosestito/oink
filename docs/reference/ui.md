@@ -125,7 +125,8 @@ id from the `# mode: <id>` tag in the story; see the
 A page without the center key always keeps the center, because the center
 zone always exists. The removed bars give their space to the center. A mode
 id without a page block uses the base layout, and the player writes a
-warning. The `prose` mode is the base layout and never warns.
+warning. The `prose` mode uses the base layout too, unless a `pages.prose`
+block overrides it, and it never warns.
 
 `characters` names the characters a scene can speak with. The key is the id
 from the `# speaker: <id>` and `# portrait: <id>` tags; see the
@@ -169,9 +170,10 @@ id that is not in the rulebook is an error.
 
 The player stops with an error when the block has bad YAML, an unknown
 field, a zero page size, a duplicate sheet group, a bottom bar with an
-unknown or repeated button, a Gray4 value outside `0` to `15`, a character
-without a name, a map without a label, or an unknown resource or
-characteristic id in the base layout or in a page block.
+unknown or repeated button, a repeated resource or characteristic id, a
+Gray4 value outside `0` to `15`, a character without a name, a map without a
+label, or an unknown resource or characteristic id in the base layout or in
+a page block.
 
 ## Demo
 

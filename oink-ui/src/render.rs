@@ -485,10 +485,25 @@ where
     let style = MonoTextStyle::new(metrics.font.font(), theme.dim);
     Text::with_baseline(&label, Point::new(x, y), style, Baseline::Top).draw(target)?;
 
-    let hit = |x: i32| {
+    // The arrow glyphs are too small for a fingertip. Pad each hit box by up
+    // to two cells sideways and half a line up and down, then clamp it to the
+    // center zone. The pad never exceeds half the gap between the glyphs, so
+    // the two boxes cannot overlap.
+    let gap = (width as i32 - 2 * cell as i32).max(0);
+    let pad_x = (2 * cell as i32).min(gap / 2);
+    let pad_y = line_height as i32 / 2;
+    let left_edge = center.top_left.x;
+    let right_edge = center.top_left.x + center.size.width as i32;
+    let top_edge = center.top_left.y;
+    let bottom_edge = center.top_left.y + center.size.height as i32;
+    let hit = |left: i32| {
+        let x0 = (left - pad_x).max(left_edge);
+        let x1 = (left + cell as i32 + pad_x).min(right_edge);
+        let y0 = (y - pad_y).max(top_edge);
+        let y1 = (y + line_height as i32 + pad_y).min(bottom_edge);
         Some(Rectangle::new(
-            Point::new(x, y),
-            Size::new(cell, line_height),
+            Point::new(x0, y0),
+            Size::new((x1 - x0).max(0) as u32, (y1 - y0).max(0) as u32),
         ))
     };
     let previous = if pager.has_previous() { hit(x) } else { None };

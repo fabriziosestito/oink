@@ -181,10 +181,16 @@ impl Scene {
         let columns = columns.max(1);
         let mut lines = Vec::new();
         for paragraph in &self.paragraphs {
-            if !paragraph.is_empty() && !lines.is_empty() {
+            // A whitespace-only paragraph wraps to no lines. Skip it before
+            // adding the separator, or it leaves two blank lines behind.
+            let wrapped = wrap_runs(paragraph, columns, Tone::Ink);
+            if wrapped.is_empty() {
+                continue;
+            }
+            if !lines.is_empty() {
                 lines.push(Line::blank());
             }
-            lines.extend(wrap_runs(paragraph, columns, Tone::Ink));
+            lines.extend(wrapped);
         }
         if !self.checks.is_empty() {
             if !lines.is_empty() {
@@ -1035,6 +1041,16 @@ mod tests {
         assert!(scene.lines(40).is_empty());
         let scene = scene_with(&[""], Vec::new(), &[]);
         assert!(scene.lines(40).is_empty());
+    }
+
+    #[test]
+    fn a_whitespace_only_paragraph_leaves_one_blank_line() {
+        let scene = scene_with(&["First.", "   ", "Second."], Vec::new(), &[]);
+        let lines = scene.lines(40);
+        assert_eq!(
+            lines.iter().map(Line::text).collect::<Vec<_>>(),
+            ["First.", "", "Second."]
+        );
     }
 
     #[test]

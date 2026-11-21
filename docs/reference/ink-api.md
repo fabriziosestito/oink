@@ -59,11 +59,12 @@ Target: {difficulty("medium")}.
 | `has_item(id)` | boolean | Tests ownership; false for an absent ID |
 | `add_item(id)` | void | Adds one unit of a known item and applies tag grants; a repeated add grows the stack |
 | `remove_item(id)` | void | Removes the whole stack of an owned item; absent IDs do nothing |
-| `use_item(id)` | void | Applies an owned consumable's conditions and removes one unit |
+| `use_item(id)` | boolean | Applies an owned consumable's conditions and removes one unit; false when nothing was used |
 
 All arguments are strings. `add_item()` and `use_item()` reject unknown definitions.
 `add_item()` also rejects gated items whose prerequisites fail.
-Using a known but absent item does nothing. Using a non-consumable does nothing.
+Using a known but absent item does nothing and returns false. Using a
+non-consumable does nothing and returns false.
 Items stack by ID. The engine has no equipment slots.
 
 ```ink

@@ -120,12 +120,25 @@ impl UiConfig {
             }
         }
         self.check_buttons(&self.layout.bottom_bar.buttons)?;
+        self.check_values(&self.layout.top_bar.resources, true)?;
+        self.check_values(&self.layout.top_bar.characteristics, false)?;
         for page in self.pages.values() {
             if let Some(ZoneOverride::Fields(fields)) = &page.bottom_bar {
                 if let Some(buttons) = &fields.buttons {
                     self.check_buttons(buttons)?;
                 }
             }
+            if let Some(ZoneOverride::Fields(fields)) = &page.top_bar {
+                if let Some(resources) = &fields.resources {
+                    self.check_values(resources, true)?;
+                }
+                if let Some(characteristics) = &fields.characteristics {
+                    self.check_values(characteristics, false)?;
+                }
+            }
+        }
+        if let Some(resources) = &self.status.resources {
+            self.check_values(resources, true)?;
         }
         for (field, value) in [
             ("theme.eink.paper", self.theme.eink.paper),
@@ -147,6 +160,21 @@ impl UiConfig {
             }
             if buttons[..index].contains(name) {
                 return Err(UiConfigError::DuplicateButton(name.clone()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Reject an id listed twice in a value list. `resources` picks the
+    /// error for a resource list; otherwise the list holds characteristics.
+    fn check_values(&self, ids: &[String], resources: bool) -> Result<(), UiConfigError> {
+        for (index, id) in ids.iter().enumerate() {
+            if ids[..index].contains(id) {
+                return Err(if resources {
+                    UiConfigError::DuplicateResource(id.clone())
+                } else {
+                    UiConfigError::DuplicateCharacteristic(id.clone())
+                });
             }
         }
         Ok(())
@@ -323,9 +351,9 @@ pub struct PageLayout {
 impl UiConfig {
     /// The layout for the scene mode `mode`.
     ///
-    /// The `prose` mode is the base layout by definition and never warns.
-    /// Every other id without a `pages` block uses the base layout and adds
-    /// a warning.
+    /// `prose` uses the base layout unless a `pages.prose` block overrides
+    /// it, and it never warns. Every other id without a `pages` block uses
+    /// the base layout and adds a warning.
     pub fn resolve_page(&self, mode: &str) -> PageLayout {
         let mut warnings = Vec::new();
         if mode != DEFAULT_MODE && !self.pages.contains_key(mode) {
@@ -482,6 +510,8 @@ pub enum UiConfigError {
     Gray4OutOfRange { field: &'static str, value: u8 },
     UnknownResource(String),
     UnknownCharacteristic(String),
+    DuplicateResource(String),
+    DuplicateCharacteristic(String),
 }
 
 impl fmt::Display for UiConfigError {
@@ -514,6 +544,12 @@ impl fmt::Display for UiConfigError {
             }
             Self::UnknownCharacteristic(id) => {
                 write!(f, "{CONFIG_FILE} `ui` names unknown characteristic `{id}`")
+            }
+            Self::DuplicateResource(id) => {
+                write!(f, "{CONFIG_FILE} `ui` lists resource `{id}` twice")
+            }
+            Self::DuplicateCharacteristic(id) => {
+                write!(f, "{CONFIG_FILE} `ui` lists characteristic `{id}` twice")
             }
         }
     }
@@ -744,6 +780,26 @@ ui:
     }
 
     #[test]
+    fn duplicate_top_bar_values_are_rejected() {
+        let yaml = "ui:\n  layout:\n    top_bar:\n      resources: [health, health]\n";
+        let error = UiConfig::from_config(yaml).unwrap_err();
+        assert!(error.to_string().contains("`health` twice"), "{error}");
+
+        let yaml = "ui:\n  layout:\n    top_bar:\n      characteristics: [physique, physique]\n";
+        let error = UiConfig::from_config(yaml).unwrap_err();
+        assert!(error.to_string().contains("`physique` twice"), "{error}");
+
+        let yaml =
+            "ui:\n  pages:\n    dialog:\n      top_bar:\n        resources: [focus, focus]\n";
+        let error = UiConfig::from_config(yaml).unwrap_err();
+        assert!(error.to_string().contains("`focus` twice"), "{error}");
+
+        let yaml = "ui:\n  status:\n    resources: [health, health]\n";
+        let error = UiConfig::from_config(yaml).unwrap_err();
+        assert!(error.to_string().contains("`health` twice"), "{error}");
+    }
+
+    #[test]
     fn unknown_and_duplicate_buttons_are_rejected() {
         let yaml = "ui:\n  layout:\n    bottom_bar:\n      buttons: [nope]\n";
         let error = UiConfig::from_config(yaml).unwrap_err();
@@ -777,6 +833,15 @@ ui:
         let config = UiConfig::from_config(yaml).expect("config parses");
         let page = config.resolve_page("prose");
         assert_eq!(page.top_bar.unwrap().resources, vec!["health"]);
+    }
+
+    #[test]
+    fn a_prose_page_block_overrides_the_base() {
+        let yaml = "ui:\n  layout:\n    top_bar:\n      resources: [health]\n  pages:\n    prose:\n      top_bar: false\n";
+        let config = UiConfig::from_config(yaml).expect("config parses");
+        let page = config.resolve_page("prose");
+        assert!(page.warnings.is_empty());
+        assert_eq!(page.top_bar, None);
     }
 
     #[test]
