@@ -267,3 +267,40 @@ fn the_reader_reports_its_touch_targets() {
     assert!(areas.previous_page_at(previous.top_left));
     assert_eq!(areas.action_at(previous.top_left), Some(Action::PageUp));
 }
+
+#[test]
+fn the_page_arrows_have_fingertip_targets() {
+    let metrics = Metrics::new(320, 240, 28, 36);
+    let size = page_size(metrics);
+    let theme = Theme::default();
+    let rulebook = Rulebook::load(RULEBOOK).expect("rulebook loads").rulebook;
+    let character = Character::from_starting(&rulebook);
+    let panel = Panel::sheet(
+        &rulebook,
+        &character,
+        &ReaderConfig::default(),
+        size.columns,
+    );
+    let mut pager = Pager::new(panel.lines.clone(), size.rows);
+    pager.next_page();
+    let mut framebuffer = support::Framebuffer::<320, 240>::new();
+    let areas = draw_panel(&mut framebuffer, metrics, theme, &panel, &pager).unwrap();
+
+    let previous = areas.previous_page().expect("a previous page");
+    let next = areas.next_page().expect("a next page");
+    let cell = metrics.font.character_width();
+    let line_height = metrics.font.line_height();
+    assert!(
+        previous.size.width > cell && previous.size.height > line_height,
+        "the previous arrow hit box must be wider and taller than the glyph: {previous:?}"
+    );
+    assert!(
+        next.size.width > cell && next.size.height > line_height,
+        "the next arrow hit box must be wider and taller than the glyph: {next:?}"
+    );
+    assert!(
+        previous.top_left.x + previous.size.width as i32 <= next.top_left.x,
+        "the two arrow hit boxes must not overlap: {previous:?} {next:?}"
+    );
+    assert!(!areas.previous_page_at(next.top_left));
+}

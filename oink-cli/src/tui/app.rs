@@ -159,6 +159,8 @@ pub struct App {
     pub menu_selection: usize,
     /// The last message of the menu, when a slot failed or a save worked.
     pub menu_message: Option<String>,
+    /// A warning for the status bar, shown on the next draw and then cleared.
+    pub notice: Option<String>,
     /// Where each menu row was drawn, with its row index, set by the view on
     /// every draw.
     pub menu_areas: Vec<(usize, Rect)>,
@@ -226,6 +228,7 @@ impl App {
             quit: false,
             menu_selection: 0,
             menu_message: None,
+            notice: None,
             menu_areas: Vec::new(),
             item_detail: None,
             item_selection: 0,

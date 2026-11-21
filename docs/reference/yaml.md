@@ -209,8 +209,8 @@ Inventory stores item IDs with a count for each one. Repeated additions form a
 stack. It has no equipment slots. Carried items supply modifiers and tags.
 Weight is metadata; the engine does not enforce a carrying limit.
 `use_item()` applies conditions and consumes one owned unit of a consumable.
-An absent item or a non-consumable is left unchanged. `remove_item()` drops
-the whole stack.
+It returns true when it consumed a unit. An absent item or a non-consumable
+is left unchanged and returns false. `remove_item()` drops the whole stack.
 
 ## Tags and grants
 

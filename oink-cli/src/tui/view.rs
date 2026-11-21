@@ -35,7 +35,12 @@ pub fn draw(
 ) {
     let area = frame.area();
     if area.height < 6 || area.width < 2 * MARGIN + 4 {
+        // No row was drawn, so every hit target from the previous frame is
+        // stale. Clear them all, or a click where a menu row or inventory
+        // item used to be still activates it.
         app.choice_areas.clear();
+        app.menu_areas.clear();
+        app.item_areas.clear();
         frame.render_widget(Paragraph::new("Window too small").style(theme.hint), area);
         return;
     }
@@ -126,7 +131,10 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         ],
         Screen::End => &["Enter close", "Enter"],
     };
-    let line = text::status_line(&app.status, hints, bar.width as usize, theme);
+    let line = match &app.notice {
+        Some(notice) => Line::styled(notice.clone(), theme.note),
+        None => text::status_line(&app.status, hints, bar.width as usize, theme),
+    };
     frame.render_widget(Paragraph::new(line).style(theme.status), bar);
 }
 
@@ -644,15 +652,37 @@ mod tests {
     }
 
     #[test]
+    fn a_notice_replaces_the_status_bar() {
+        let mut app = app();
+        app.notice = Some("warning: cannot read art/cover.png".to_string());
+        let buffer = render(&mut app, 60, 16);
+        assert!(
+            row(&buffer, 15).contains("warning: cannot read art/cover.png"),
+            "{:?}",
+            row(&buffer, 15)
+        );
+    }
+
+    #[test]
     fn a_tiny_window_shows_a_hint_instead_of_panicking() {
         let mut app = app();
         render(&mut app, 60, 16);
         assert_eq!(app.choice_areas.len(), 2, "the big window records choices");
+        app.menu_areas = vec![(0, Rect::new(0, 2, 40, 1))];
+        app.item_areas = vec![("key".to_string(), Rect::new(0, 3, 40, 1))];
         let buffer = render(&mut app, 60, 5);
         assert!(row(&buffer, 0).contains("Window too small"));
         assert!(
             app.choice_areas.is_empty(),
-            "stale click targets must not survive the resize"
+            "stale choice targets must not survive the resize"
+        );
+        assert!(
+            app.menu_areas.is_empty(),
+            "stale menu targets must not survive the resize"
+        );
+        assert!(
+            app.item_areas.is_empty(),
+            "stale item targets must not survive the resize"
         );
     }
 }

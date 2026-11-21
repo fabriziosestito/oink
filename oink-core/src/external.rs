@@ -334,6 +334,7 @@ pub(crate) fn bind_external_functions(
                 .ok_or_else(|| external_error(format!("unknown item `{id}`")))?;
             let consumable = item.consumable;
             let conditions = item.applies_conditions.clone();
+            let mut used = false;
             if consumable && state.character.has_item(&id) {
                 for condition in conditions {
                     let changes = state.character.add_condition(&state.rulebook, &condition);
@@ -341,8 +342,9 @@ pub(crate) fn bind_external_functions(
                 }
                 let changes = state.character.consume_item(&id, 1);
                 state.changes.extend(changes);
+                used = true;
             }
-            void_result()
+            bool_result(used)
         })?;
     }
 

@@ -89,19 +89,27 @@ fn play(
     // The scene and item pictures, keyed by their path in the bundle.
     let mut images: HashMap<String, Option<Picture>> = HashMap::new();
     while !app.quit {
-        let portrait = match app.portrait() {
+        let portrait = match app.portrait().map(str::to_string) {
             Some(id) => {
-                if !portraits.contains_key(id) {
-                    portraits.insert(id.to_string(), load_portrait(bundle, &app, &painter, id));
+                if !portraits.contains_key(&id) {
+                    let (picture, warning) = load_portrait(bundle, &app, &painter, &id);
+                    if let Some(warning) = warning {
+                        app.notice = Some(warning);
+                    }
+                    portraits.insert(id.clone(), picture);
                 }
-                portraits.get_mut(id).and_then(|picture| picture.as_mut())
+                portraits.get_mut(&id).and_then(|picture| picture.as_mut())
             }
             None => None,
         };
         let image = match app.image_path().map(str::to_string) {
             Some(path) => {
                 if !images.contains_key(&path) {
-                    images.insert(path.clone(), load_image(&bundle.dir, &painter, &path));
+                    let (picture, warning) = load_image(&bundle.dir, &painter, &path);
+                    if let Some(warning) = warning {
+                        app.notice = Some(warning);
+                    }
+                    images.insert(path.clone(), picture);
                 }
                 images.get_mut(&path).and_then(|picture| picture.as_mut())
             }
@@ -109,6 +117,7 @@ fn play(
         };
         terminal
             .draw(|frame| view::draw(frame, &mut app, theme, cover.as_mut(), portrait, image))?;
+        app.notice = None;
         if let Some(action) = action(event::read()?) {
             app.update(action)?;
         }
@@ -116,27 +125,42 @@ fn play(
     Ok(app.screen == Screen::End)
 }
 
-/// The portrait picture of a character, when its file reads.
-fn load_portrait(bundle: &Bundle, app: &App, painter: &Painter, id: &str) -> Option<Picture> {
-    let path = app.portrait_path(id).map(|path| bundle.dir.join(path))?;
+/// The portrait picture of a character, when its file reads, plus a warning
+/// for the status bar when it does not.
+fn load_portrait(
+    bundle: &Bundle,
+    app: &App,
+    painter: &Painter,
+    id: &str,
+) -> (Option<Picture>, Option<String>) {
+    let Some(path) = app.portrait_path(id).map(|path| bundle.dir.join(path)) else {
+        return (None, None);
+    };
     match image::open(&path) {
-        Ok(picture) => Some(painter.view(picture)),
-        Err(error) => {
-            eprintln!("warning: cannot read portrait {}: {error}", path.display());
-            None
-        }
+        Ok(picture) => (Some(painter.view(picture)), None),
+        Err(error) => (
+            None,
+            Some(format!(
+                "warning: cannot read portrait {}: {error}",
+                path.display()
+            )),
+        ),
     }
 }
 
-/// A scene or item picture, when its file reads.
-fn load_image(dir: &Path, painter: &Painter, path: &str) -> Option<Picture> {
+/// A scene or item picture, when its file reads, plus a warning for the
+/// status bar when it does not.
+fn load_image(dir: &Path, painter: &Painter, path: &str) -> (Option<Picture>, Option<String>) {
     let path = dir.join(path);
     match image::open(&path) {
-        Ok(picture) => Some(painter.view(picture)),
-        Err(error) => {
-            eprintln!("warning: cannot read image {}: {error}", path.display());
-            None
-        }
+        Ok(picture) => (Some(painter.view(picture)), None),
+        Err(error) => (
+            None,
+            Some(format!(
+                "warning: cannot read image {}: {error}",
+                path.display()
+            )),
+        ),
     }
 }
 
@@ -290,7 +314,9 @@ mod tests {
         .unwrap();
 
         let painter = Painter::halfblocks();
-        let mut picture = load_image(&dir, &painter, "art/test.pgm").expect("the ASCII PGM loads");
+        let (picture, warning) = load_image(&dir, &painter, "art/test.pgm");
+        assert!(warning.is_none(), "{warning:?}");
+        let mut picture = picture.expect("the ASCII PGM loads");
         let mut terminal = Terminal::new(TestBackend::new(8, 4)).unwrap();
         terminal
             .draw(|frame| picture.render(frame, frame.area()))

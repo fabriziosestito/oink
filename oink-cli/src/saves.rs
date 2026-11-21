@@ -61,11 +61,21 @@ impl Saves {
     }
 
     /// Write a slot, creating the saves directory when it is missing.
+    ///
+    /// The text goes to a temporary file first and then replaces the slot
+    /// with a rename, so a crash or a full disk never leaves a half-written
+    /// slot behind.
     pub fn write(&self, slot: usize, text: &str) -> Result<(), String> {
         let path = self.path(slot)?;
         fs::create_dir_all(&self.dir)
             .map_err(|error| format!("cannot create {}: {error}", self.dir.display()))?;
-        fs::write(&path, text).map_err(|error| format!("cannot write {}: {error}", path.display()))
+        let temporary = path.with_extension("json.tmp");
+        fs::write(&temporary, text)
+            .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+        fs::rename(&temporary, &path).map_err(|error| {
+            let _ = fs::remove_file(&temporary);
+            format!("cannot replace {}: {error}", path.display())
+        })
     }
 }
 
@@ -94,6 +104,30 @@ mod tests {
         assert!(saves.exists(1));
         assert_eq!(saves.read(1).unwrap().as_deref(), Some("{\"version\":1}"));
         assert!(!saves.exists(2));
+
+        let _ = fs::remove_dir_all(saves.dir);
+    }
+
+    #[test]
+    fn a_write_replaces_the_slot_and_leaves_no_temporary_file() {
+        let saves = Saves::new(temp_dir(), 1);
+        saves.write(1, "one").unwrap();
+        saves.write(1, "two").unwrap();
+        assert_eq!(saves.read(1).unwrap().as_deref(), Some("two"));
+        assert!(!saves.dir.join("slot-1.json.tmp").exists());
+
+        let _ = fs::remove_dir_all(saves.dir);
+    }
+
+    #[test]
+    fn a_failed_write_keeps_the_old_slot() {
+        let saves = Saves::new(temp_dir(), 1);
+        saves.write(1, "old").unwrap();
+        // A directory in place of the temporary file makes the write fail
+        // before the rename.
+        fs::create_dir_all(saves.dir.join("slot-1.json.tmp")).unwrap();
+        assert!(saves.write(1, "new").is_err());
+        assert_eq!(saves.read(1).unwrap().as_deref(), Some("old"));
 
         let _ = fs::remove_dir_all(saves.dir);
     }

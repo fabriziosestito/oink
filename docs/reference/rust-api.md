@@ -69,10 +69,16 @@ Queues accumulate until drained. `snapshot()` does not drain the queues;
 `restore()` clears them.
 
 The save envelope has the format version `SAVE_VERSION`, which is 1. The file
-holds the story state, the `Character`, the dice state, and the last `Event`.
-A file with another version fails with `EngineError::Save`. Restoring needs the
-same story source and rulebook: the engine keeps its compiled story and
-bindings and replaces only state. The dice state continues a seeded run.
+holds the story state, the `Character`, the dice state, the last `Event`, and
+a checksum of that payload. A file with another version, a missing checksum,
+or a checksum that does not match the payload fails with `EngineError::Save`
+before the story runtime parses it. Restoring needs the same story source and
+rulebook: the engine keeps its compiled story and bindings and replaces only
+state. The dice state continues a seeded run.
+
+The active check is not part of the save. After `restore()`, `check_roll()`,
+`check_score()`, and the other check queries report no active check until the
+story rolls again.
 
 ```rust
 pub struct Choice {

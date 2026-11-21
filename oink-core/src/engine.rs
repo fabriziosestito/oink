@@ -182,10 +182,30 @@ pub(crate) type Shared = Rc<RefCell<RuleState>>;
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveFile {
     version: u32,
+    /// A hash of the payload, so a truncated or hand-edited file fails
+    /// before the story runtime parses its JSON.
+    checksum: u64,
     story: String,
     character: Character,
     dice: Option<u64>,
     event: Option<Event>,
+}
+
+/// A 64-bit FNV-1a hash of the save payload.
+fn save_checksum(
+    story: &str,
+    character: &Character,
+    dice: Option<u64>,
+    event: &Option<Event>,
+) -> Result<u64, EngineError> {
+    let bytes = serde_json::to_vec(&(story, character, dice, event))
+        .map_err(|error| EngineError::Save(error.to_string()))?;
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    Ok(hash)
 }
 
 pub struct Engine {
@@ -257,11 +277,15 @@ impl Engine {
     /// Write the story, the character, and the dice to a JSON save file.
     pub fn snapshot(&self) -> Result<String, EngineError> {
         let state = self.state.borrow();
+        let story = self.story.save_state()?;
+        let dice = state.dice.state();
+        let checksum = save_checksum(&story, &state.character, dice, &self.last_event)?;
         let file = SaveFile {
             version: SAVE_VERSION,
-            story: self.story.save_state()?,
+            checksum,
+            story,
             character: state.character.clone(),
-            dice: state.dice.state(),
+            dice,
             event: self.last_event.clone(),
         };
         serde_json::to_string(&file).map_err(|error| EngineError::Save(error.to_string()))
@@ -270,11 +294,13 @@ impl Engine {
     /// Load a save file into this engine and return the scene it left.
     ///
     /// The story must load from the same source as the save. The host keeps
-    /// the same rulebook and bundle. A file with another version is rejected.
-    /// The pending change and check queues are cleared.
+    /// the same rulebook and bundle. A file with another version or a
+    /// mismatched checksum is rejected before the story parses it. The
+    /// pending change and check queues are cleared.
     pub fn restore(&mut self, snapshot: &str) -> Result<Event, EngineError> {
         let SaveFile {
             version,
+            checksum,
             story,
             character,
             dice,
@@ -284,6 +310,12 @@ impl Engine {
             return Err(EngineError::Save(format!(
                 "unsupported save version {version}, expected {SAVE_VERSION}"
             )));
+        }
+        let expected = save_checksum(&story, &character, dice, &event)?;
+        if checksum != expected {
+            return Err(EngineError::Save(
+                "save file is corrupted (checksum mismatch)".to_string(),
+            ));
         }
         self.story.load_state(&story)?;
         {
@@ -585,6 +617,43 @@ Stamina is {resource("stamina")}.
         );
         assert!(description.contains("score"), "{description}");
         assert!(description.contains("target 7"), "{description}");
+    }
+
+    #[test]
+    fn use_item_reports_whether_it_used_anything() {
+        let mut engine = example_engine(
+            r#"
+EXTERNAL use_item(item)
+
+{ use_item("key"):
+    key used.
+- else:
+    key untouched.
+}
+{ use_item("potion"):
+    potion used.
+- else:
+    potion untouched.
+}
+{ use_item("stick"):
+    stick used.
+- else:
+    stick untouched.
+}
+-> END
+"#,
+        );
+
+        let event = engine.start().unwrap();
+        let Event::TheEnd { text } = event else {
+            panic!("expected the end")
+        };
+        let joined = text.join(" ");
+        assert!(joined.contains("key untouched."), "{joined}");
+        assert!(joined.contains("potion used."), "{joined}");
+        assert!(joined.contains("stick untouched."), "{joined}");
+        assert!(!engine.character().has_item("potion"));
+        assert!(engine.character().has_item("stick"));
     }
 
     #[test]
@@ -943,6 +1012,45 @@ A roll waits.
         engine.restore(&snapshot).unwrap();
         let _ = engine.choose(0).unwrap();
         assert_eq!(original, engine.take_checks());
+    }
+
+    #[test]
+    fn a_tampered_snapshot_is_rejected_before_the_story_parses_it() {
+        let mut engine = example_engine("A scene.\n+ [Go]\n    -> END\n");
+        engine.start().unwrap();
+        let snapshot = engine.snapshot().unwrap();
+
+        // Drop the text of a saved choice. The story runtime unwraps that
+        // field, so without the checksum this would panic.
+        let mut envelope: serde_json::Value = serde_json::from_str(&snapshot).unwrap();
+        let story_text = envelope["story"].as_str().unwrap().to_string();
+        let mut story: serde_json::Value = serde_json::from_str(&story_text).unwrap();
+        assert!(
+            strip_choice_text(&mut story),
+            "the story state holds a saved choice"
+        );
+        envelope["story"] = serde_json::Value::String(story.to_string());
+        let tampered = serde_json::to_string(&envelope).unwrap();
+
+        let error = engine.restore(&tampered).unwrap_err();
+        assert!(error.to_string().contains("checksum"), "{error}");
+
+        // The engine keeps its old state and still advances.
+        assert!(engine.choose(0).is_ok());
+    }
+
+    fn strip_choice_text(value: &mut serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Object(map) => {
+                if map.contains_key("text") && map.contains_key("index") {
+                    map.remove("text");
+                    return true;
+                }
+                map.values_mut().any(strip_choice_text)
+            }
+            serde_json::Value::Array(items) => items.iter_mut().any(strip_choice_text),
+            _ => false,
+        }
     }
 
     #[test]
